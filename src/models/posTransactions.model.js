@@ -13,7 +13,6 @@ const posTransactionSchema = new mongoose.Schema({
     transactionNumber: {
         type: String,
         required: true,
-        unique: true,
         trim: true
     },
     products: [

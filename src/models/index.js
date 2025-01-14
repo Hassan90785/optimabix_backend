@@ -9,14 +9,14 @@ export { default as Entities } from './entities.model.js';
 export { default as Products } from './products.model.js';
 export { default as Inventory } from './inventory.model.js';
 export { default as Discounts } from './discounts.model.js';
-export { default as TaxConfigurations } from './taxConfigurations.model.js';
-export { default as POSTransactions } from './posTransactions.model.js';
+export { default as TaxConfiguration } from './taxConfigurations.model.js';
+export { default as POSTransaction } from './posTransactions.model.js';
 export { default as Ledger } from './ledger.model.js';
 export { default as Payments } from './payments.model.js';
 export { default as Invoices } from './invoices.model.js';
-export { default as StockAdjustments } from './stockAdjustments.model.js';
-export { default as SubscriptionPlans } from './subscriptionPlans.model.js';
-export { default as AuditLogs } from './auditLogs.model.js';
+export { default as StockAdjustment } from './stockAdjustments.model.js';
+export { default as SubscriptionPlan } from './subscriptionPlans.model.js';
+export { default as AuditLog } from './auditLogs.model.js';
 
 // Exporting mongoose instance if needed for central management
 export default mongoose;

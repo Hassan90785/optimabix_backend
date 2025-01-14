@@ -106,18 +106,3 @@ export const deleteModule = async (req, res) => {
     }
 };
 
-/**
- * @desc Get all modules
- * @param req
- * @param res
- * @returns {Promise<*>}
- */
-export const getAllModules = async (req, res) => {
-    try {
-        const modules = await Modules.find().populate('accessControl.rolesAllowed');
-        return successResponse(res, modules, 'Modules fetched successfully');
-    } catch (error) {
-        logger.error('Error fetching modules:', error);
-        return errorResponse(res, error.message);
-    }
-};

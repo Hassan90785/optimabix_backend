@@ -1,12 +1,13 @@
 import express from 'express';
 import {
+    addPaymentRecord,
     createCompany,
     getAllCompanies,
     getCompanyById,
+    restoreCompany,
+    softDeleteCompany,
     updateCompany,
-    updateCompanyAccessStatus,
-    addPaymentRecord,
-    deleteCompany, softDeleteCompany, restoreCompany
+    updateCompanyAccessStatus
 } from '../controllers/companies.controller.js';
 
 import authMiddleware from '../middlewares/auth.middleware.js';

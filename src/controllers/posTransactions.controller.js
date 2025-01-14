@@ -1,4 +1,4 @@
-import { POSTransaction, Products } from '../models/index.js';
+import {  Products, POSTransaction } from '../models/index.js';
 import { successResponse, errorResponse, logger } from '../utils/index.js';
 
 /**

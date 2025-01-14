@@ -4,7 +4,6 @@ const modulesSchema = new mongoose.Schema({
     moduleName: {
         type: String,
         required: true,
-        unique: true,
         trim: true
     },
     description: {

@@ -13,8 +13,7 @@ const inventorySchema = new mongoose.Schema({
         },
         barcode: {
             type: String,
-            required: true,
-            unique: true
+            required: true
         },
         batches: [
             {

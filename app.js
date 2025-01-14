@@ -1,8 +1,8 @@
 import express from 'express';
 import dotenv from 'dotenv';
-import connectDB from './config/database.js';
-import routes from './routes/index.js';
-import errorMiddleware from './middlewares/error.middleware.js';
+import connectDB from './src/config/db.config.js';
+import routes from './src/routes/index.js';
+import errorMiddleware from './src/middlewares/error.middleware.js';
 
 dotenv.config();
 
