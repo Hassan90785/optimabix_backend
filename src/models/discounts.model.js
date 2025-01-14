@@ -20,10 +20,12 @@ const discountSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
-    applicableProducts: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Products'
-    }],
+    applicableProducts: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Products'
+        }
+    ],
     validFrom: {
         type: Date,
         default: Date.now
@@ -35,23 +37,43 @@ const discountSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
+    // Soft Deletion and Auditing Fields
+    isDeleted: {
+        type: Boolean,
+        default: false
+    },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
+        ref: 'Users',
+        required: true
     },
-    createdAt: {
-        type: Date,
-        default: Date.now
+    updatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
     },
-    updatedAt: {
-        type: Date,
-        default: Date.now
+    deletedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
     }
-}, {timestamps: true});
+}, { timestamps: true });
 
 // Indexes for optimized lookups
-discountSchema.index({companyId: 1, discountType: 1});
+discountSchema.index({ companyId: 1, discountType: 1 });
+discountSchema.index({ discountName: 1 });
+discountSchema.index({ isDeleted: 1 });
+
+// Pre-query middleware to exclude soft-deleted records
+discountSchema.pre(/^find/, function(next) {
+    this.where({ isDeleted: false });
+    next();
+});
+
+// Soft deletion method
+discountSchema.methods.softDelete = async function (deletedBy) {
+    this.isDeleted = true;
+    this.deletedBy = deletedBy;
+    await this.save();
+};
 
 const Discounts = mongoose.model('Discount', discountSchema);
 export default Discounts;
-

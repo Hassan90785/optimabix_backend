@@ -13,8 +13,14 @@ const subscriptionPlanSchema = new mongoose.Schema({
     },
     features: [
         {
-            featureName: String,
-            featureDescription: String
+            featureName: {
+                type: String,
+                required: true
+            },
+            featureDescription: {
+                type: String,
+                trim: true
+            }
         }
     ],
     price: {
@@ -31,19 +37,43 @@ const subscriptionPlanSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
-    createdAt: {
-        type: Date,
-        default: Date.now
+    // Soft Deletion and Auditing Fields
+    isDeleted: {
+        type: Boolean,
+        default: false
     },
-    updatedAt: {
-        type: Date,
-        default: Date.now
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users',
+        required: true
+    },
+    updatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
+    },
+    deletedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
     }
 }, { timestamps: true });
 
 // Indexes for optimized lookups
-subscriptionPlanSchema.index({ planName: 1, planType: 1 });
+subscriptionPlanSchema.index({ planType: 1 });
+subscriptionPlanSchema.index({ planName: 1 });
+subscriptionPlanSchema.index({ isDeleted: 1 });
+
+// Pre-query middleware to exclude soft-deleted records
+subscriptionPlanSchema.pre(/^find/, function(next) {
+    this.where({ isDeleted: false });
+    next();
+});
+
+// Method for soft deletion
+subscriptionPlanSchema.methods.softDelete = async function (deletedBy) {
+    this.isDeleted = true;
+    this.deletedBy = deletedBy;
+    await this.save();
+};
 
 const SubscriptionPlan = mongoose.model('SubscriptionPlan', subscriptionPlanSchema);
 export default SubscriptionPlan;
-

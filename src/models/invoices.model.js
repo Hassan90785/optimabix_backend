@@ -33,7 +33,7 @@ const invoiceSchema = new mongoose.Schema({
     linkedEntityId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Entities',
-        default: null // Optional for POS sales without customer data
+        default: null
     },
     lineItems: [
         {
@@ -85,26 +85,44 @@ const invoiceSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    // Soft Deletion and Auditing Fields
+    isDeleted: {
+        type: Boolean,
+        default: false
+    },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
+        ref: 'Users',
+        required: true
     },
-    createdAt: {
-        type: Date,
-        default: Date.now
+    updatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
     },
-    updatedAt: {
-        type: Date,
-        default: Date.now
+    deletedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
     }
 }, { timestamps: true });
 
-// Indexes for faster reporting
+// Indexes for optimized lookups
 invoiceSchema.index({ companyId: 1, issuedDate: -1 });
 invoiceSchema.index({ invoiceNumber: 1 });
 invoiceSchema.index({ paymentStatus: 1 });
+invoiceSchema.index({ isDeleted: 1 });
 
-const Invoice = mongoose.model('Invoice', invoiceSchema);
-export default Invoice;
+// Pre-query middleware to exclude soft-deleted records
+invoiceSchema.pre(/^find/, function (next) {
+    this.where({ isDeleted: false });
+    next();
+});
 
+// Soft deletion method
+invoiceSchema.methods.softDelete = async function (deletedBy) {
+    this.isDeleted = true;
+    this.deletedBy = deletedBy;
+    await this.save();
+};
 
+const Invoices = mongoose.model('Invoices', invoiceSchema);
+export default Invoices;

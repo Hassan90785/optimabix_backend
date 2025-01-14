@@ -32,10 +32,6 @@ const stockAdjustmentSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     },
-    createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    },
     relatedTransactionId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'POSTransactions',
@@ -46,21 +42,43 @@ const stockAdjustmentSchema = new mongoose.Schema({
         ref: 'Ledger',
         required: true
     },
-    createdAt: {
-        type: Date,
-        default: Date.now
+    // Soft Deletion and Auditing Fields
+    isDeleted: {
+        type: Boolean,
+        default: false
     },
-    updatedAt: {
-        type: Date,
-        default: Date.now
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users',
+        required: true
+    },
+    updatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
+    },
+    deletedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
     }
 }, { timestamps: true });
 
 // Indexes for optimized lookups
 stockAdjustmentSchema.index({ companyId: 1, productId: 1 });
 stockAdjustmentSchema.index({ adjustmentType: 1 });
+stockAdjustmentSchema.index({ isDeleted: 1 });
 
+// Pre-query middleware to exclude soft-deleted records
+stockAdjustmentSchema.pre(/^find/, function (next) {
+    this.where({ isDeleted: false });
+    next();
+});
+
+// Method for soft deletion
+stockAdjustmentSchema.methods.softDelete = async function (deletedBy) {
+    this.isDeleted = true;
+    this.deletedBy = deletedBy;
+    await this.save();
+};
 
 const StockAdjustment = mongoose.model('StockAdjustment', stockAdjustmentSchema);
 export default StockAdjustment;
-

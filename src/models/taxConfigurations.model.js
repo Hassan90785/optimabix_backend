@@ -27,24 +27,42 @@ const taxConfigurationSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
+    // Soft Deletion and Auditing Fields
+    isDeleted: {
+        type: Boolean,
+        default: false
+    },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
+        ref: 'Users',
+        required: true
     },
-    createdAt: {
-        type: Date,
-        default: Date.now
+    updatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
     },
-    updatedAt: {
-        type: Date,
-        default: Date.now
+    deletedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
     }
 }, { timestamps: true });
 
-// Indexes for tax reporting
+// Indexes for optimized lookups
 taxConfigurationSchema.index({ companyId: 1, taxName: 1 });
+taxConfigurationSchema.index({ isDeleted: 1 });
 
+// Pre-query middleware to exclude soft-deleted records
+taxConfigurationSchema.pre(/^find/, function(next) {
+    this.where({ isDeleted: false });
+    next();
+});
+
+// Method for soft deletion
+taxConfigurationSchema.methods.softDelete = async function (deletedBy) {
+    this.isDeleted = true;
+    this.deletedBy = deletedBy;
+    await this.save();
+};
 
 const TaxConfiguration = mongoose.model('TaxConfiguration', taxConfigurationSchema);
 export default TaxConfiguration;
-
