@@ -16,7 +16,7 @@ const ledgerSchema = new mongoose.Schema({
     },
     linkedEntityId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Entities', // Optional for POS transactions with no customer data
+        ref: 'Entities',
         default: null
     },
     transactionType: {
@@ -44,25 +44,44 @@ const ledgerSchema = new mongoose.Schema({
         type: String,
         enum: ['POS Transactions', 'Payments', 'Invoices']
     },
+    // Soft Deletion and Auditing Fields
+    isDeleted: {
+        type: Boolean,
+        default: false
+    },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
+        ref: 'Users',
+        required: true
     },
-    createdAt: {
-        type: Date,
-        default: Date.now
+    updatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
     },
-    updatedAt: {
-        type: Date,
-        default: Date.now
+    deletedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
     }
 }, { timestamps: true });
 
-// Indexes for faster filtering and lookups
+// Indexes for optimized lookups
 ledgerSchema.index({ companyId: 1, date: -1 });
 ledgerSchema.index({ linkedEntityId: 1 });
 ledgerSchema.index({ transactionType: 1 });
+ledgerSchema.index({ isDeleted: 1 });
+
+// Pre-query middleware to exclude soft-deleted records
+ledgerSchema.pre(/^find/, function(next) {
+    this.where({ isDeleted: false });
+    next();
+});
+
+// Method for soft deletion
+ledgerSchema.methods.softDelete = async function (deletedBy) {
+    this.isDeleted = true;
+    this.deletedBy = deletedBy;
+    await this.save();
+};
 
 const Ledger = mongoose.model('Ledger', ledgerSchema);
 export default Ledger;
-

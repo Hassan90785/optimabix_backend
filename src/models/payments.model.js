@@ -37,31 +37,50 @@ const paymentSchema = new mongoose.Schema({
     paidBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Entities',
-        default: null // Optional for anonymous POS payments
+        default: null
     },
     paymentDate: {
         type: Date,
         default: Date.now
     },
+    // Soft Deletion and Auditing Fields
+    isDeleted: {
+        type: Boolean,
+        default: false
+    },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
+        ref: 'Users',
+        required: true
     },
-    createdAt: {
-        type: Date,
-        default: Date.now
+    updatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
     },
-    updatedAt: {
-        type: Date,
-        default: Date.now
+    deletedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
     }
 }, { timestamps: true });
 
-// Indexes for optimized financial reporting and lookups
+// Indexes for optimized lookups
 paymentSchema.index({ companyId: 1, paymentDate: -1 });
 paymentSchema.index({ transactionId: 1 });
 paymentSchema.index({ paymentStatus: 1 });
+paymentSchema.index({ isDeleted: 1 });
+
+// Pre-query middleware to exclude soft-deleted records
+paymentSchema.pre(/^find/, function (next) {
+    this.where({ isDeleted: false });
+    next();
+});
+
+// Method for soft deletion
+paymentSchema.methods.softDelete = async function (deletedBy) {
+    this.isDeleted = true;
+    this.deletedBy = deletedBy;
+    await this.save();
+};
 
 const Payments = mongoose.model('Payments', paymentSchema);
 export default Payments;
-

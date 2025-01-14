@@ -23,12 +23,16 @@ const posTransactionSchema = new mongoose.Schema({
                 ref: 'Products',
                 required: true
             },
+            batchId: {
+                type: String,
+                trim: true
+            },
             quantity: {
                 type: Number,
                 required: true
             },
             unitPrice: {
-                type: Number,  // Kept for historical sale record purposes
+                type: Number,
                 required: true
             },
             totalPrice: {
@@ -79,30 +83,43 @@ const posTransactionSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Ledger'
     },
-    createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    },
+    // Soft Deletion and Auditing Fields
     isDeleted: {
         type: Boolean,
         default: false
     },
-    createdAt: {
-        type: Date,
-        default: Date.now
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users',
+        required: true
     },
-    updatedAt: {
-        type: Date,
-        default: Date.now
+    updatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
+    },
+    deletedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
     }
 }, { timestamps: true });
 
 // Indexes for optimized lookups
 posTransactionSchema.index({ companyId: 1, date: -1 });
 posTransactionSchema.index({ transactionNumber: 1 });
+posTransactionSchema.index({ isDeleted: 1 });
 
+// Pre-query middleware to exclude soft-deleted records
+posTransactionSchema.pre(/^find/, function(next) {
+    this.where({ isDeleted: false });
+    next();
+});
+
+// Method for soft deletion
+posTransactionSchema.methods.softDelete = async function (deletedBy) {
+    this.isDeleted = true;
+    this.deletedBy = deletedBy;
+    await this.save();
+};
 
 const POSTransaction = mongoose.model('POSTransaction', posTransactionSchema);
 export default POSTransaction;
-
-
