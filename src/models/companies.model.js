@@ -45,6 +45,14 @@ const companySchema = new mongoose.Schema(
             enum: ['Active', 'Suspended', 'Revoked', 'Trial', 'Expired'],
             default: 'Active'
         },
+        suspendedReason: {
+            type: String,
+            trim: true
+        },
+        revokedReason: {
+            type: String,
+            trim: true
+        },
         paymentHistory: [
             {
                 date: { type: Date },
@@ -56,22 +64,27 @@ const companySchema = new mongoose.Schema(
             type: Date
         },
         gracePeriod: {
-            type: Number, // Days allowed after due date before suspension
+            type: Number, // Days allowed after the due date before suspension
             default: 0
         },
-        suspendedReason: {
-            type: String
+        // Soft Deletion Flag
+        isDeleted: {
+            type: Boolean,
+            default: false
         },
-        revokedReason: {
-            type: String
+        // Auditing Fields
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Users',
+            required: true
         },
-        createdAt: {
-            type: Date,
-            default: Date.now
+        updatedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Users'
         },
-        updatedAt: {
-            type: Date,
-            default: Date.now
+        deletedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Users'
         }
     },
     {
@@ -79,10 +92,23 @@ const companySchema = new mongoose.Schema(
     }
 );
 
-// Adding an index on businessType for optimized queries
+// Indexing for optimized lookups and reporting
 companySchema.index({ businessType: 1 });
 companySchema.index({ name: 1 }, { unique: true });
+companySchema.index({ isDeleted: 1 });
 
-// Export the Company model
-const Company = mongoose.model('Company', companySchema);
-export default Company;
+// Adding a pre-query middleware to exclude deleted documents
+companySchema.pre(/^find/, function (next) {
+    this.where({ isDeleted: false });
+    next();
+});
+
+// Adding a method for soft deletion
+companySchema.methods.softDelete = async function (deletedBy) {
+    this.isDeleted = true;
+    this.deletedBy = deletedBy;
+    await this.save();
+};
+
+const Companies = mongoose.model('Companies', companySchema);
+export default Companies;
