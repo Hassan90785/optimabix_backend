@@ -1,10 +1,8 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 
-// Load Environment Variables
 dotenv.config();
 
-// Connect to MongoDB
 const connectDB = async () => {
     try {
         await mongoose.connect(process.env.MONGO_URI, {
@@ -14,8 +12,18 @@ const connectDB = async () => {
         console.log('✅ MongoDB connected successfully');
     } catch (error) {
         console.error('❌ MongoDB connection error:', error.message);
-        process.exit(1); // Exit on failure
+        process.exit(1);
     }
 };
+
+// Handling MongoDB events
+mongoose.connection.on('disconnected', () => {
+    console.warn('⚠️ MongoDB disconnected. Reconnecting...');
+    connectDB();
+});
+
+mongoose.connection.on('reconnected', () => {
+    console.log('✅ MongoDB reconnected.');
+});
 
 export default connectDB;
