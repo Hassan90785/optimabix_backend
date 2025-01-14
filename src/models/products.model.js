@@ -28,10 +28,6 @@ const productSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
-    image: {
-        type: String,  // URL or file path for product image storage
-        trim: true
-    },
     price: {
         unitPurchasePrice: {
             type: Number,
@@ -64,37 +60,80 @@ const productSchema = new mongoose.Schema({
     },
     vendorId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Entities'  // References the vendor the product was purchased from
+        ref: 'Entities'
     },
     companyId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Companies',
         required: true
     },
-    createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    },
+    batches: [
+        {
+            batchId: {
+                type: String,
+                required: true
+            },
+            quantity: {
+                type: Number,
+                required: true
+            },
+            purchasePrice: {
+                type: Number,
+                required: true
+            },
+            sellingPrice: {
+                type: Number,
+                required: true
+            },
+            dateAdded: {
+                type: Date,
+                default: Date.now
+            }
+        }
+    ],
     isDeleted: {
         type: Boolean,
         default: false
     },
-    createdAt: {
-        type: Date,
-        default: Date.now
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users',
+        required: true
     },
-    updatedAt: {
-        type: Date,
-        default: Date.now
+    updatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
+    },
+    deletedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Users'
     }
 }, { timestamps: true });
 
 // Indexes for optimized lookups
 productSchema.index({ sku: 1, companyId: 1 });
 productSchema.index({ productName: 1 });
-productSchema.index({ brandName: 1, modelNumber: 1 });
+productSchema.index({ category: 1 });
+productSchema.index({ isDeleted: 1 });
 
+// Pre-query middleware to exclude soft-deleted records
+productSchema.pre(/^find/, function (next) {
+    this.where({ isDeleted: false });
+    next();
+});
 
-const Product = mongoose.model('Product', productSchema);
-export default Product;
+// Method to handle soft deletion
+productSchema.methods.softDelete = async function (deletedBy) {
+    this.isDeleted = true;
+    this.deletedBy = deletedBy;
+    await this.save();
+};
 
+// Method to auto-generate SKU if not provided
+productSchema.methods.generateSKU = function () {
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    this.sku = `${this.productName.replace(/\s+/g, '').substring(0, 5).toUpperCase()}-${randomNum}`;
+};
+
+const Products = mongoose.model('Products', productSchema);
+export default Products;
