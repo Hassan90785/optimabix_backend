@@ -3,11 +3,13 @@ import dotenv from 'dotenv';
 import connectDB from './src/config/db.config.js';
 import routes from './src/routes/index.js';
 import errorMiddleware from './src/middlewares/error.middleware.js';
+import cors from 'cors';
 
 dotenv.config();
 
 // Initialize Express App
 const app = express();
+app.use(cors());
 
 // Connect to Database
 connectDB();

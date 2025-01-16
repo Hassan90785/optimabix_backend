@@ -14,6 +14,7 @@ export { default as POSTransaction } from './posTransactions.model.js';
 export { default as Ledger } from './ledger.model.js';
 export { default as Payments } from './payments.model.js';
 export { default as Invoices } from './invoices.model.js';
+export { default as Admin } from './admin.model.js';
 export { default as StockAdjustment } from './stockAdjustments.model.js';
 export { default as SubscriptionPlan } from './subscriptionPlans.model.js';
 export { default as AuditLog } from './auditLogs.model.js';

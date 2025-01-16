@@ -28,7 +28,7 @@ router.post('/', authMiddleware, validationMiddleware, createCompany);
  * @queryParams ?businessType=POS&page=1&limit=10&sort=name
  * @access Private
  */
-router.get('/', authMiddleware, getAllCompanies);
+router.get('/',  getAllCompanies);
 
 /**
  * @route GET /api/v1/companies/:id

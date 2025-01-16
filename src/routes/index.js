@@ -17,6 +17,7 @@ import taxConfigurationsRoutes from './taxConfigurations.routes.js';
 import discountsRoutes from './discounts.routes.js';
 import subscriptionPlansRoutes from './subscriptionPlans.routes.js';
 import auditLogsRoutes from './auditLogs.routes.js';
+import adminRoutes from "./admin.routes.js";
 
 const router = express.Router();
 
@@ -32,6 +33,7 @@ router.use('/posTransactions', posTransactionsRoutes);
 router.use('/ledger', ledgerRoutes);
 router.use('/payments', paymentsRoutes);
 router.use('/invoices', invoicesRoutes);
+router.use('/admin', adminRoutes);
 router.use('/stockAdjustments', stockAdjustmentsRoutes);
 router.use('/taxConfigurations', taxConfigurationsRoutes);
 router.use('/discounts', discountsRoutes);
