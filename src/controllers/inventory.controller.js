@@ -7,7 +7,7 @@ import { successResponse, errorResponse, logger } from '../utils/index.js';
  */
 export const createInventory = async (req, res) => {
     try {
-        const { productId, companyId, barcode, batches } = req.body;
+        const { productId, companyId, vendorId, barcode, batches , createdBy } = req.body;
 
         // Validate product and company existence
         const productExists = await Products.findById(productId);
@@ -21,15 +21,16 @@ export const createInventory = async (req, res) => {
         }
 
         // Calculate total quantity from batches
-        const totalQuantity = batches.reduce((sum, batch) => sum + batch.quantity, 0);
+        const totalQuantity = batches.quantity;
 
         const newInventory = await Inventory.create({
             productId,
             companyId,
+            vendorId,
             barcode,
             batches,
             totalQuantity,
-            createdBy: req.user._id
+            createdBy
         });
 
         logger.info(`Inventory added for Product: ${productId}`);

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import {v4 as uuidv4} from "uuid";
 
 const inventorySchema = new mongoose.Schema({
         companyId: {
@@ -12,15 +13,10 @@ const inventorySchema = new mongoose.Schema({
             required: true
         },
         barcode: {
-            type: String,
-            required: true
+            type: String
         },
         batches: [
             {
-                batchId: {
-                    type: String,
-                    required: true
-                },
                 quantity: {
                     type: Number,
                     required: true
@@ -48,6 +44,11 @@ const inventorySchema = new mongoose.Schema({
             type: Boolean,
             default: false
         },
+        vendorId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Entities',
+            required: true
+        },
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Users',
@@ -62,19 +63,25 @@ const inventorySchema = new mongoose.Schema({
             ref: 'Users'
         }
     },
-    { timestamps: true });
+    {timestamps: true});
 
 // Indexing for optimized lookups
-inventorySchema.index({ companyId: 1, productId: 1 });
-inventorySchema.index({ barcode: 1 });
-inventorySchema.index({ isDeleted: 1 });
+inventorySchema.index({companyId: 1, productId: 1});
+inventorySchema.index({barcode: 1});
+inventorySchema.index({isDeleted: 1});
 
 // Pre-query middleware to exclude soft-deleted records
-inventorySchema.pre(/^find/, function(next) {
-    this.where({ isDeleted: false });
+inventorySchema.pre(/^find/, function (next) {
+    this.where({isDeleted: false});
     next();
 });
-
+// Pre-save middleware to generate a barcode if not present
+inventorySchema.pre('save', function (next) {
+    if (!this.barcode) {
+        this.barcode = `BC-${this.companyId}-${this.productId}-${uuidv4()}`; // Customize this logic if needed
+    }
+    next();
+});
 // Method for soft deletion
 inventorySchema.methods.softDelete = async function (deletedBy) {
     this.isDeleted = true;
