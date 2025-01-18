@@ -46,7 +46,7 @@ export const createUser = async (req, res) => {
 export const loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
-        const user = await Users.findOne({ email }).populate('role');
+        const user = await Users.findOne({ email });
 
         if (!user) {
             return errorResponse(res, 'Invalid credentials.', 401);
@@ -57,6 +57,7 @@ export const loginUser = async (req, res) => {
         if (!isMatch) {
             return errorResponse(res, 'Invalid credentials.', 401);
         }
+        console.log('user', user);
 
         // Generate JWT token
         const token = jwt.sign({ id: user._id, role: user.role.roleName }, process.env.JWT_SECRET, {

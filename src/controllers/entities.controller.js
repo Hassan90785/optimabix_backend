@@ -13,6 +13,8 @@ export const createEntity = async (req, res) => {
             contactPerson,
             billingAddress,
             shippingAddress,
+            createdBy,
+            companyId,
             taxInformation
         } = req.body;
 
@@ -29,7 +31,8 @@ export const createEntity = async (req, res) => {
             billingAddress,
             shippingAddress,
             taxInformation,
-            createdBy: req.user._id
+            companyId,
+            createdBy
         });
 
         logger.info(`Entity created: ${newEntity.entityName}`);
@@ -47,15 +50,16 @@ export const createEntity = async (req, res) => {
  */
 export const getAllEntities = async (req, res) => {
     try {
-        const { entityType, page = 1, limit = 10 } = req.query;
-        const filter = entityType ? { entityType } : {};
+        logger.info('Fetching entities...');
+        const { entityType, page = 1, limit = 10, companyId } = req.query;
+        const filter = entityType ? { entityType, companyId } : {companyId};
 
         const entities = await Entities.find(filter)
             .skip((page - 1) * limit)
             .limit(Number(limit));
 
         const totalRecords = await Entities.countDocuments(filter);
-
+        console.log('entities', entities);
         return successResponse(res, {
             entities,
             totalRecords,

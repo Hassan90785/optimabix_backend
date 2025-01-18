@@ -8,7 +8,6 @@ const productSchema = new mongoose.Schema({
     },
     sku: {
         type: String,
-        required: true,
         unique: true,
         trim: true
     },
@@ -58,14 +57,9 @@ const productSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
-    vendorId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Entities'
-    },
     companyId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Companies',
-        required: true
+        ref: 'Companies'
     },
     batches: [
         {
@@ -97,8 +91,7 @@ const productSchema = new mongoose.Schema({
     },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Users',
-        required: true
+        ref: 'Users'
     },
     updatedBy: {
         type: mongoose.Schema.Types.ObjectId,
@@ -132,6 +125,7 @@ productSchema.methods.softDelete = async function (deletedBy) {
 // Method to auto-generate SKU if not provided
 productSchema.methods.generateSKU = function () {
     const randomNum = Math.floor(1000 + Math.random() * 9000);
+    console.log('this.productName.replace(/\s+/g, \'\').substring(0, 5).toUpperCase()', this.productName.replace(/\s+/g, '').substring(0, 5).toUpperCase())
     this.sku = `${this.productName.replace(/\s+/g, '').substring(0, 5).toUpperCase()}-${randomNum}`;
 };
 

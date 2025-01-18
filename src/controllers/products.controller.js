@@ -20,14 +20,9 @@ export const createProduct = async (req, res) => {
             batches
         } = req.body;
 
-        // Validate vendor and company existence
-        const vendorExists = vendorId ? await Entities.findById(vendorId) : true;
-        if (vendorId && !vendorExists) {
-            return errorResponse(res, 'Vendor not found.', 404);
-        }
 
         // Prevent duplicate SKU within the same company
-        let existingProduct = await Products.findOne({ sku, companyId });
+        let existingProduct = await Products.findOne({ sku });
         if (existingProduct) {
             return errorResponse(res, 'Product with this SKU already exists.', 400);
         }
@@ -44,7 +39,6 @@ export const createProduct = async (req, res) => {
             vendorId,
             companyId,
             batches,
-            createdBy: req.user._id
         });
 
         if (!sku) product.generateSKU();
