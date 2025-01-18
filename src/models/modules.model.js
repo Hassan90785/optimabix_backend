@@ -33,17 +33,10 @@ const modulesSchema = new mongoose.Schema({
     ],
     accessStatus: {
         type: String,
-        enum: ['Active', 'Suspended', 'Revoked', 'Trial', 'Expired'],
+        enum: ['Active', 'InActive'],
         default: 'Active'
     },
-    accessControl: {
-        rolesAllowed: [
-            {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: 'Roles'
-            }
-        ]
-    },
+
     createdAt: {
         type: Date,
         default: Date.now

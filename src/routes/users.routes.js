@@ -32,7 +32,7 @@ router.post('/login', loginUser);
  * @desc Fetch all users (Requires JWT)
  * @access Private
  */
-router.get('/', authMiddleware, getAllUsers);
+router.get('/',  getAllUsers);
 
 /**
  * @route GET /api/v1/users/:id

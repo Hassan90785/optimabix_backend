@@ -17,35 +17,35 @@ const router = express.Router();
  * @desc Create a new role
  * @access Private (JWT Protected)
  */
-router.post('/', authMiddleware, validationMiddleware, createRole);
+router.post('/',  validationMiddleware, createRole);
 
 /**
  * @route GET /api/v1/roles
  * @desc Get all roles (Supports pagination & filtering)
  * @access Private
  */
-router.get('/', authMiddleware, getAllRoles);
+router.get('/',  getAllRoles);
 
 /**
  * @route GET /api/v1/roles/:id
  * @desc Get a specific role by ID
  * @access Private
  */
-router.get('/:id', authMiddleware, getRoleById);
+router.get('/:id',  getRoleById);
 
 /**
  * @route PUT /api/v1/roles/:id
  * @desc Update a role by ID
  * @access Private
  */
-router.put('/:id', authMiddleware, validationMiddleware, updateRole);
+router.put('/:id',  validationMiddleware, updateRole);
 
 /**
  * @route DELETE /api/v1/roles/:id
  * @desc Delete a role by ID
  * @access Private
  */
-router.delete('/:id', authMiddleware, deleteRole);
+router.delete('/:id',  deleteRole);
 
 export default router;
 

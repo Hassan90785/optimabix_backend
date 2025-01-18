@@ -77,8 +77,30 @@ export const loginUser = async (req, res) => {
  */
 export const getAllUsers = async (req, res) => {
     try {
-        const users = await Users.find().populate('role companyId');
-        return successResponse(res, users, 'Users fetched successfully');
+        const { role, companyId, page = 1, limit = 10, sort = 'name' } = req.query;
+
+        // Build filter object based on query parameters
+        const filter = {};
+        if (role) filter.role = role;
+        if (companyId) filter.companyId = companyId;
+
+        // Fetch users with pagination and sorting
+        const users = await Users.find(filter)
+            .populate('role companyId')
+            .sort({ [sort]: 1 })
+            .skip((page - 1) * limit)
+            .limit(Number(limit));
+
+        // Count total users matching the filter
+        const totalCount = await Users.countDocuments(filter);
+
+        // Return consistent response
+        return successResponse(res, {
+            users,
+            totalRecords: totalCount,
+            currentPage: Number(page),
+            totalPages: Math.ceil(totalCount / limit),
+        }, 'Users fetched successfully');
     } catch (error) {
         logger.error('Error fetching users:', error);
         return errorResponse(res, error.message);

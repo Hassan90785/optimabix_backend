@@ -1,5 +1,5 @@
-import { Modules } from '../models/index.js';
-import { successResponse, errorResponse, logger } from '../utils/index.js';
+import {Modules} from '../models/index.js';
+import {errorResponse, logger, successResponse} from '../utils/index.js';
 
 /**
  * @desc Create a new module
@@ -7,9 +7,9 @@ import { successResponse, errorResponse, logger } from '../utils/index.js';
  */
 export const createModule = async (req, res) => {
     try {
-        const { moduleName, description, icon, operations, accessStatus, accessControl } = req.body;
+        const {moduleName, description, icon, operations, accessStatus} = req.body;
 
-        const existingModule = await Modules.findOne({ moduleName });
+        const existingModule = await Modules.findOne({moduleName});
         if (existingModule) {
             return errorResponse(res, 'Module already exists', 400);
         }
@@ -19,8 +19,7 @@ export const createModule = async (req, res) => {
             description,
             icon,
             operations,
-            accessStatus,
-            accessControl
+            accessStatus
         });
 
         logger.info(`Module created: ${moduleName}`);
@@ -37,8 +36,18 @@ export const createModule = async (req, res) => {
  */
 export const getAllModules = async (req, res) => {
     try {
-        const modules = await Modules.find().populate('accessControl.rolesAllowed');
-        return successResponse(res, modules, 'Modules fetched successfully');
+        const {page = 1, limit = 10, sort = 'moduleName'} = req.query;
+        const filter = {};
+        const modules = await Modules.find(filter)
+            .sort({[sort]: 1})
+            .skip((page - 1) * limit)
+            .limit(Number(limit));
+        const totalCount = await Modules.countDocuments(filter);
+        return successResponse(res, {
+            modules, totalRecords: totalCount,
+            currentPage: Number(page),
+            totalPages: Math.ceil(totalCount / limit),
+        }, 'Modules fetched successfully');
     } catch (error) {
         logger.error('Error fetching modules:', error);
         return errorResponse(res, error.message);
@@ -51,7 +60,7 @@ export const getAllModules = async (req, res) => {
  */
 export const getModuleById = async (req, res) => {
     try {
-        const module = await Modules.findById(req.params.id).populate('accessControl.rolesAllowed');
+        const module = await Modules.findById(req.params.id);
         if (!module) {
             return errorResponse(res, 'Module not found', 404);
         }
@@ -68,12 +77,12 @@ export const getModuleById = async (req, res) => {
  */
 export const updateModule = async (req, res) => {
     try {
-        const { moduleName, description, icon, operations, accessStatus, accessControl } = req.body;
+        const {moduleName, description, icon, operations, accessStatus} = req.body;
 
         const updatedModule = await Modules.findByIdAndUpdate(
             req.params.id,
-            { moduleName, description, icon, operations, accessStatus, accessControl },
-            { new: true, runValidators: true }
+            {moduleName, description, icon, operations, accessStatus},
+            {new: true, runValidators: true}
         );
 
         if (!updatedModule) {

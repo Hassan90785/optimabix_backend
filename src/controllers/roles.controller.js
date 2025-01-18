@@ -36,8 +36,27 @@ export const createRole = async (req, res) => {
  */
 export const getAllRoles = async (req, res) => {
     try {
-        const roles = await Roles.find().populate('companyAccessControl.companyId userAccessControl.userId');
-        return successResponse(res, roles, 'Roles fetched successfully');
+        const { page = 1, limit = 10, sort = 'roleName', companyId } = req.query;
+
+        // Define the filter
+        const filter = companyId ? { 'companyAccessControl.companyId': companyId } : {};
+
+        // Pagination and Sorting
+        const roles = await Roles.find(filter)
+            .populate('companyAccessControl.companyId userAccessControl.userId')
+            .sort({ [sort]: 1 })
+            .skip((page - 1) * limit)
+            .limit(Number(limit));
+
+        // Total Count
+        const totalRecords = await Roles.countDocuments(filter);
+
+        return successResponse(res, {
+            roles,
+            totalRecords,
+            currentPage: Number(page),
+            totalPages: Math.ceil(totalRecords / limit),
+        }, 'Roles fetched successfully');
     } catch (error) {
         logger.error('Error fetching roles:', error);
         return errorResponse(res, error.message);

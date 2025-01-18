@@ -44,7 +44,7 @@ const rolesSchema = new mongoose.Schema({
         {
             userId: {
                 type: mongoose.Schema.Types.ObjectId,
-                ref: 'Users',
+                ref: 'User',
                 required: true
             },
             permissions: [

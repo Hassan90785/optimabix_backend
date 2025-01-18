@@ -74,8 +74,7 @@ const companySchema = new mongoose.Schema(
         // Auditing Fields
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: 'Users',
-            required: true
+            ref: 'Users'
         },
         updatedBy: {
             type: mongoose.Schema.Types.ObjectId,
