@@ -2,9 +2,10 @@ import express from 'express';
 import {
     createInventory,
     getAllInventory,
+    getAvailableInventory,
     getInventoryById,
-    updateInventory,
-    softDeleteInventory
+    softDeleteInventory,
+    updateInventory
 } from '../controllers/inventory.controller.js';
 
 import authMiddleware from '../middlewares/auth.middleware.js';
@@ -25,6 +26,13 @@ router.post('/', authMiddleware, validationMiddleware, createInventory);
  * @access Private
  */
 router.get('/', authMiddleware, getAllInventory);
+
+/**
+ * @route GET /api/v1/inventory/getAvailable
+ * @desc Get available inventory
+ * @access Private
+ */
+router.get('/getAvailable', authMiddleware, getAvailableInventory);
 
 /**
  * @route GET /api/v1/inventory/:id
