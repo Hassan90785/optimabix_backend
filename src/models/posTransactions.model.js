@@ -12,6 +12,7 @@ const posTransactionSchema = new mongoose.Schema({
     },
     transactionNumber: {
         type: String,
+        unique: true, // Ensure uniqueness
         required: true,
         trim: true
     },
@@ -110,6 +111,30 @@ posTransactionSchema.index({ isDeleted: 1 });
 // Pre-query middleware to exclude soft-deleted records
 posTransactionSchema.pre(/^find/, function(next) {
     this.where({ isDeleted: false });
+    next();
+});
+
+// Middleware to auto-generate a unique human-readable transaction number
+posTransactionSchema.pre('save', async function(next) {
+    if (this.isNew) {
+        const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+        const companyIdPart = this.companyId.toString().slice(-4); // Last 4 digits of companyId
+        const prefix = `TXN-${datePart}-${companyIdPart}`;
+
+        // Find the highest counter for the current date and company
+        const lastTransaction = await mongoose.model('POSTransaction')
+            .findOne({ transactionNumber: new RegExp(`^${prefix}`) })
+            .sort({ transactionNumber: -1 })
+            .exec();
+
+        let counter = 1;
+        if (lastTransaction) {
+            const lastCounter = parseInt(lastTransaction.transactionNumber.split('-').pop());
+            counter = lastCounter + 1;
+        }
+
+        this.transactionNumber = `${prefix}-${counter.toString().padStart(6, '0')}`; // Ensure a 6-digit counter
+    }
     next();
 });
 
