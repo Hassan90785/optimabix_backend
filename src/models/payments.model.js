@@ -14,7 +14,6 @@ const paymentSchema = new mongoose.Schema({
     ledgerEntryId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Ledger',
-        required: true
     },
     paymentMethod: {
         type: String,

@@ -13,13 +13,12 @@ const invoiceSchema = new mongoose.Schema({
     },
     ledgerEntryId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Ledger',
-        required: true
+        ref: 'Ledger'
     },
     invoiceNumber: {
         type: String,
-        required: true,
-        trim: true
+        trim: true,
+        unique: true // Ensure invoice numbers are unique
     },
     issuedDate: {
         type: Date,
@@ -27,7 +26,7 @@ const invoiceSchema = new mongoose.Schema({
     },
     dueDate: {
         type: Date,
-        required: true
+        default: null
     },
     linkedEntityId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -113,6 +112,16 @@ invoiceSchema.index({ isDeleted: 1 });
 // Pre-query middleware to exclude soft-deleted records
 invoiceSchema.pre(/^find/, function (next) {
     this.where({ isDeleted: false });
+    next();
+});
+
+// Pre-save middleware to auto-generate invoice number
+invoiceSchema.pre('save', async function (next) {
+    if (!this.invoiceNumber) {
+        const timestamp = Date.now();
+        const randomSuffix = Math.floor(Math.random() * 1000);
+        this.invoiceNumber = `INV-${timestamp}-${randomSuffix}`;
+    }
     next();
 });
 

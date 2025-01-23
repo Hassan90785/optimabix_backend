@@ -1,53 +1,105 @@
-import {  Products, POSTransaction } from '../models/index.js';
+import {Products, POSTransaction, Payments, Invoices} from '../models/index.js';
 import { successResponse, errorResponse, logger } from '../utils/index.js';
+import mongoose from "mongoose";
 
 /**
  * @desc Create a POS transaction with product validation and auditing
  * @route POST /api/v1/posTransactions
  */
 export const createPOSTransaction = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
         const {
             companyId,
             products,
             discountAmount,
             taxAmount,
+            subTotal,
             totalPayable,
             paymentMethod,
             paidAmount,
-            paymentReference
+            createdBy,
+            changeGiven
         } = req.body;
 
-        // Validate products and calculate subtotal
-        let subTotal = 0;
-        for (const item of products) {
-            const product = await Products.findById(item.productId);
-            if (!product) {
-                return errorResponse(res, `Product not found: ${item.productId}`, 404);
-            }
-            subTotal += item.unitPrice * item.quantity;
-        }
-
         // Generate a unique transaction number
-        const transactionNumber = `POS-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-        const newTransaction = await POSTransaction.create({
-            companyId,
-            products,
-            transactionNumber,
-            subTotal,
-            discountAmount,
-            taxAmount,
-            totalPayable,
-            paymentMethod,
-            paidAmount,
-            paymentReference,
-            createdBy: req.user._id
-        });
+        // Create a new POS transaction (array wrapped)
+        const [newTransaction] = await POSTransaction.create(
+            [
+                {
+                    companyId,
+                    products,
+                    subTotal,
+                    discountAmount,
+                    taxAmount,
+                    totalPayable,
+                    paymentMethod,
+                    paidAmount,
+                    changeGiven,
+                    createdBy
+                }
+            ],
+            { session }
+        );
+        logger.info(`POS Transaction created: ${newTransaction.transactionNumber}`);
 
-        logger.info(`POS Transaction created: ${transactionNumber}`);
-        return successResponse(res, newTransaction, 'Transaction created successfully');
+        // Create a new payment record (array wrapped)
+        const [payment] = await Payments.create(
+            [
+                {
+                    companyId,
+                    transactionId: newTransaction._id,
+                    ledgerEntryId: null, // Placeholder; update with actual ledger entry logic if needed
+                    paymentMethod,
+                    amountPaid: paidAmount,
+                    paymentStatus: paidAmount >= totalPayable ? 'Completed' : 'Pending',
+                    createdBy,
+                    paidBy: null // Placeholder; update with actual payer logic if needed
+                }
+            ],
+            { session }
+        );
+
+        // Create a new invoice record (array wrapped)
+        const [invoice] = await Invoices.create(
+            [
+                {
+                    companyId,
+                    transactionId: newTransaction._id,
+                    ledgerEntryId: null, // Placeholder; update with actual ledger entry logic if needed
+                    linkedEntityId: null, // Optional, depending on the customer or vendor
+                    lineItems: products.map(product => ({
+                        productId: product.productId,
+                        batchId: product.batchId || null,
+                        quantity: product.quantity,
+                        unitPrice: product.unitPrice,
+                        totalPrice: product.totalPrice
+                    })),
+                    subTotal,
+                    discountAmount,
+                    taxAmount,
+                    totalAmount: totalPayable,
+                    paymentStatus: paidAmount >= totalPayable ? 'Paid' : 'Partial',
+                    createdBy,
+                    notes: 'Invoice for the transaction'
+                }
+            ],
+            { session }
+        );
+        // Commit the transaction
+        await session.commitTransaction();
+        await session.endSession();
+
+        logger.info(`Transaction, payment, and invoice created successfully: ${newTransaction.transactionNumber} & ${invoice.invoiceNumber} `);
+        return successResponse(res, { transaction: newTransaction, payment }, 'Transaction and payment created successfully');
     } catch (error) {
+        // Rollback the transaction in case of an error
+        await session.abortTransaction();
+        await session.endSession();
+
         logger.error('Error creating transaction:', error);
         return errorResponse(res, error.message);
     }
