@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>POS Transaction Receipt</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .header { text-align: center; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f4f4f4; }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>Transaction Receipt</h1>
+    <p>Transaction #: {{transactionNumber}}</p>
+    <p>Date: {{date}}</p>
+</div>
+<table>
+    <thead>
+    <tr>
+        <th>Product</th>
+        <th>Quantity</th>
+        <th>Unit Price</th>
+        <th>Total Price</th>
+    </tr>
+    </thead>
+    <tbody>
+    {{#each products}}
+        <tr>
+            <td>{{this.productId}}</td>
+            <td>{{this.quantity}}</td>
+            <td>{{this.unitPrice}}</td>
+            <td>{{this.totalPrice}}</td>
+        </tr>
+    {{/each}}
+    </tbody>
+</table>
+<p>Subtotal: {{subTotal}}</p>
+<p>Tax: {{taxAmount}}</p>
+<p>Discount: {{discountAmount}}</p>
+<p>Total Payable: {{totalPayable}}</p>
+<p>Paid Amount: {{paidAmount}}</p>
+<p>Change Given: {{changeGiven}}</p>
+<p>Payment Method: {{paymentMethod}}</p>
+</body>
+</html>

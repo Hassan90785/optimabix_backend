@@ -2,6 +2,7 @@ import puppeteer from 'puppeteer';
 import handlebars from 'handlebars';
 import fs from 'fs/promises';
 import path from 'path';
+import {logger} from "./index.js";
 
 const generatePDF = async (templateName, data, outputPath) => {
     try {
@@ -14,11 +15,21 @@ const generatePDF = async (templateName, data, outputPath) => {
         const page = await browser.newPage();
         await page.setContent(html);
 
-        await page.pdf({ path: outputPath, format: 'A4' });
-        await browser.close();
+        // Custom page size for 80mm x 297mm (48-column thermal paper)
+        await page.pdf({
+            path: outputPath,
+            width: '80mm',
+            height: '297mm',
+        });
 
-        return outputPath;
+        await browser.close();
+        // Remove 'src' from the path
+        const publicPath = outputPath.replace(/^src[\\/]/, ''); // Remove 'src/' or 'src\\'
+
+        logger.info(`PDF is generated at : ${outputPath}`)
+        return publicPath;
     } catch (error) {
+        console.log('error:::', error)
         throw new Error('Error generating PDF');
     }
 };

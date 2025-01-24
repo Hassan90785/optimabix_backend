@@ -55,7 +55,8 @@ export const getAllLedgerEntries = async (req, res) => {
         const ledgerEntries = await Ledger.find(filter)
             .sort({date: -1})
             .skip((page - 1) * limit)
-            .limit(Number(limit));
+            .limit(Number(limit))
+            .populate('linkedEntityId');
 
         const totalRecords = await Ledger.countDocuments(filter);
         return successResponse(res, {

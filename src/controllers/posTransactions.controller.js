@@ -1,11 +1,13 @@
 import {Invoices, Ledger, Payments, POSTransaction} from '../models/index.js';
-import {errorResponse, logger, successResponse} from '../utils/index.js';
+import {errorResponse, generatePDF, logger, successResponse} from '../utils/index.js';
 import mongoose from "mongoose";
 
 export const createPOSTransaction = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
-
+    /**
+     *  Transaction Handling
+     */
     try {
         const {
             companyId,
@@ -41,7 +43,9 @@ export const createPOSTransaction = async (req, res) => {
             {session}
         );
         logger.info(`POS Transaction created: ${newTransaction.transactionNumber}`);
-
+        /**
+         * Payment Handling
+         */
         // Create a new payment record
         const [payment] = await Payments.create(
             [
@@ -58,7 +62,9 @@ export const createPOSTransaction = async (req, res) => {
             ],
             {session}
         );
-
+        /**
+         * Invoice Handling
+         */
         // Create a new invoice record
         const [invoice] = await Invoices.create(
             [
@@ -85,7 +91,10 @@ export const createPOSTransaction = async (req, res) => {
             ],
             {session}
         );
-
+        /**
+         * Ledger Handling
+         * @type {*[]}
+         */
         // Add ledger entries for the transaction
         const ledgerEntries = [];
 
@@ -158,23 +167,50 @@ export const createPOSTransaction = async (req, res) => {
 
         // Commit the transaction
         await session.commitTransaction();
+        // Generate PDF receipt
+        const receiptData = {
+            transactionNumber: newTransaction.transactionNumber,
+            date: new Date().toLocaleString(),
+            companyId,
+            products,
+            discountAmount,
+            taxAmount,
+            subTotal,
+            totalPayable,
+            paidAmount,
+            changeGiven,
+            paymentMethod,
+        };
+        /**
+         * PDF handling
+         * @type {string}
+         */
+        const receiptPath = `src/uploads/receipts/${newTransaction.transactionNumber}.pdf`;
+        const pdfPath = await generatePDF('posReceipt', receiptData, receiptPath);
+
         await session.endSession();
 
         logger.info(`Transaction, payment, and invoice created successfully: ${newTransaction.transactionNumber} & ${invoice.invoiceNumber}`);
         return successResponse(res, {
             transaction: newTransaction,
-            payment
+            payment,
+            receiptPath: pdfPath,
         }, 'Transaction and payment created successfully');
     } catch (error) {
-        // Rollback the transaction in case of an error
-        await session.abortTransaction();
-        await session.endSession();
+
+        console.log('Error:: ', error)
+        logger.error('Error creating transaction:', error);
+        if (session.inTransaction()) {
+            await session.abortTransaction();
+        }
 
         logger.error('Error creating transaction:', error);
         return errorResponse(res, error.message);
+    } finally {
+        // Ensure the session is ended
+        await session.endSession();
     }
 };
-
 
 /**
  * @desc Get all POS transactions with pagination and filtering
