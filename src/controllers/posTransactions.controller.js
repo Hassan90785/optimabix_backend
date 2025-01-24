@@ -1,11 +1,7 @@
-import {Products, POSTransaction, Payments, Invoices} from '../models/index.js';
-import { successResponse, errorResponse, logger } from '../utils/index.js';
+import {Invoices, Ledger, Payments, POSTransaction} from '../models/index.js';
+import {errorResponse, logger, successResponse} from '../utils/index.js';
 import mongoose from "mongoose";
 
-/**
- * @desc Create a POS transaction with product validation and auditing
- * @route POST /api/v1/posTransactions
- */
 export const createPOSTransaction = async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -24,9 +20,9 @@ export const createPOSTransaction = async (req, res) => {
             changeGiven
         } = req.body;
 
-        // Generate a unique transaction number
+        // Generate a unique transaction number if necessary (you can use an auto-increment or UUID logic here)
 
-        // Create a new POS transaction (array wrapped)
+        // Create a new POS transaction
         const [newTransaction] = await POSTransaction.create(
             [
                 {
@@ -42,11 +38,11 @@ export const createPOSTransaction = async (req, res) => {
                     createdBy
                 }
             ],
-            { session }
+            {session}
         );
         logger.info(`POS Transaction created: ${newTransaction.transactionNumber}`);
 
-        // Create a new payment record (array wrapped)
+        // Create a new payment record
         const [payment] = await Payments.create(
             [
                 {
@@ -60,10 +56,10 @@ export const createPOSTransaction = async (req, res) => {
                     paidBy: null // Placeholder; update with actual payer logic if needed
                 }
             ],
-            { session }
+            {session}
         );
 
-        // Create a new invoice record (array wrapped)
+        // Create a new invoice record
         const [invoice] = await Invoices.create(
             [
                 {
@@ -87,14 +83,88 @@ export const createPOSTransaction = async (req, res) => {
                     notes: 'Invoice for the transaction'
                 }
             ],
-            { session }
+            {session}
         );
+
+        // Add ledger entries for the transaction
+        const ledgerEntries = [];
+
+        // Ledger Entry: Sales Revenue
+        ledgerEntries.push(
+            Ledger.manageLedgerEntry({
+                companyId,
+                transactionType: 'Sale',
+                description: `Sales revenue recorded for transaction ${newTransaction.transactionNumber}`,
+                debitCaption: 'Accounts Receivable',
+                creditCaption: 'Sales Revenue',
+                debitAmount: subTotal,
+                creditAmount: subTotal,
+                referenceType: 'POS Transactions',
+                createdBy,
+            })
+        );
+
+        // Ledger Entry: Tax Collected
+        if (taxAmount > 0) {
+            ledgerEntries.push(
+                Ledger.manageLedgerEntry({
+                    companyId,
+                    transactionType: 'Tax',
+                    description: `Tax collected for transaction ${newTransaction.transactionNumber}`,
+                    debitCaption: 'Accounts Receivable',
+                    creditCaption: 'Tax Payable',
+                    debitAmount: taxAmount,
+                    creditAmount: taxAmount,
+                    referenceType: 'POS Transactions',
+                    createdBy,
+                })
+            );
+        }
+
+        // Ledger Entry: Discount Given
+        if (discountAmount > 0) {
+            ledgerEntries.push(
+                Ledger.manageLedgerEntry({
+                    companyId,
+                    transactionType: 'Discount',
+                    description: `Discount given for transaction ${newTransaction.transactionNumber}`,
+                    debitCaption: 'Discount Expense',
+                    creditCaption: 'Accounts Receivable',
+                    debitAmount: discountAmount,
+                    creditAmount: discountAmount,
+                    referenceType: 'POS Transactions',
+                    createdBy,
+                })
+            );
+        }
+
+        // Ledger Entry: Payment Received
+        ledgerEntries.push(
+            Ledger.manageLedgerEntry({
+                companyId,
+                transactionType: 'Payment',
+                description: `Payment received for transaction ${newTransaction.transactionNumber}`,
+                debitCaption: 'Cash/Bank',
+                creditCaption: 'Accounts Receivable',
+                debitAmount: paidAmount,
+                creditAmount: paidAmount,
+                referenceType: 'Payments',
+                createdBy,
+            })
+        );
+
+        // Execute all ledger entry promises
+        await Promise.all(ledgerEntries);
+
         // Commit the transaction
         await session.commitTransaction();
         await session.endSession();
 
-        logger.info(`Transaction, payment, and invoice created successfully: ${newTransaction.transactionNumber} & ${invoice.invoiceNumber} `);
-        return successResponse(res, { transaction: newTransaction, payment }, 'Transaction and payment created successfully');
+        logger.info(`Transaction, payment, and invoice created successfully: ${newTransaction.transactionNumber} & ${invoice.invoiceNumber}`);
+        return successResponse(res, {
+            transaction: newTransaction,
+            payment
+        }, 'Transaction and payment created successfully');
     } catch (error) {
         // Rollback the transaction in case of an error
         await session.abortTransaction();
@@ -105,6 +175,7 @@ export const createPOSTransaction = async (req, res) => {
     }
 };
 
+
 /**
  * @desc Get all POS transactions with pagination and filtering
  * @route GET /api/v1/posTransactions
@@ -112,8 +183,8 @@ export const createPOSTransaction = async (req, res) => {
  */
 export const getAllPOSTransactions = async (req, res) => {
     try {
-        const { companyId, page = 1, limit = 10 } = req.query;
-        const filter = { companyId, isDeleted: false };
+        const {companyId, page = 1, limit = 10} = req.query;
+        const filter = {companyId, isDeleted: false};
 
         const transactions = await POSTransaction.find(filter)
             .populate('products.productId')

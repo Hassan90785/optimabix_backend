@@ -14,6 +14,14 @@ const ledgerSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    debitCaption: {
+        type: String,
+        trim: true
+    },
+    creditCaption: {
+        type: String,
+        trim: true
+    },
     linkedEntityId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Entities',
@@ -21,7 +29,7 @@ const ledgerSchema = new mongoose.Schema({
     },
     transactionType: {
         type: String,
-        enum: ['Sale', 'Purchase', 'Return', 'Refund', 'Discount', 'Expense', 'Tax', 'Subscription'],
+        enum: ['Sale', 'Purchase', 'Return', 'Refund', 'Discount','Payment', 'Expense', 'Tax', 'Subscription'],
         required: true
     },
     debitAmount: {
@@ -36,13 +44,13 @@ const ledgerSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
-    referenceId: {
+    invoiceId: {
         type: mongoose.Schema.Types.ObjectId,
-        refPath: 'referenceType'
+        ref: 'Invoices'
     },
     referenceType: {
         type: String,
-        enum: ['POS Transactions', 'Payments', 'Invoices']
+        enum: ['POS Transactions', 'Payments', 'Inventory']
     },
     // Soft Deletion and Auditing Fields
     isDeleted: {
@@ -81,6 +89,53 @@ ledgerSchema.methods.softDelete = async function (deletedBy) {
     this.isDeleted = true;
     this.deletedBy = deletedBy;
     await this.save();
+};
+
+
+// Function to create or update ledger entries
+ledgerSchema.statics.manageLedgerEntry = async function ({
+                                                             companyId,
+                                                             transactionType,
+                                                             description,
+                                                             debitCaption,
+                                                             creditCaption,
+                                                             debitAmount = 0,
+                                                             creditAmount = 0,
+                                                             linkedEntityId = null,
+                                                             invoiceId = null,
+                                                             referenceType,
+                                                             createdBy
+                                                         }) {
+    try {
+        // Step 1: Check if a ledger entry exists for the given companyId
+        let ledger = await this.findOne({ companyId }).sort({ date: -1 });
+
+        // Step 2: Calculate the new balance
+        const previousBalance = ledger ? ledger.balance : 0;
+        const newBalance = previousBalance + debitAmount - creditAmount;
+
+        // Step 3: Create a new ledger entry
+        const newLedgerEntry = await this.create({
+            companyId,
+            transactionType,
+            description,
+            debitAmount,
+            creditAmount,
+            creditCaption,
+            debitCaption,
+            balance: newBalance,
+            linkedEntityId,
+            invoiceId,
+            referenceType,
+            createdBy
+        });
+
+        // Return the newly created ledger entry
+        return newLedgerEntry;
+    } catch (error) {
+        console.error('Error managing ledger entry:', error);
+        throw new Error('Failed to manage ledger entry');
+    }
 };
 
 const Ledger = mongoose.model('Ledger', ledgerSchema);

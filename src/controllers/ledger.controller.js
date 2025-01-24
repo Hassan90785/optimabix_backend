@@ -1,5 +1,5 @@
-import { Ledger } from '../models/index.js';
-import { successResponse, errorResponse, logger } from '../utils/index.js';
+import {Ledger} from '../models/index.js';
+import {errorResponse, logger, successResponse} from '../utils/index.js';
 
 /**
  * @desc Create a ledger entry with auditing and financial handling
@@ -49,11 +49,11 @@ export const createLedgerEntry = async (req, res) => {
  */
 export const getAllLedgerEntries = async (req, res) => {
     try {
-        const { companyId, page = 1, limit = 10 } = req.query;
-        const filter = { companyId, isDeleted: false };
+        const {companyId, page = 1, limit = 10} = req.query;
+        const filter = {companyId, isDeleted: false};
 
         const ledgerEntries = await Ledger.find(filter)
-            .sort({ date: -1 })
+            .sort({date: -1})
             .skip((page - 1) * limit)
             .limit(Number(limit));
 

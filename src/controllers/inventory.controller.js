@@ -1,23 +1,27 @@
-import {Inventory, Products} from '../models/index.js';
+import {Inventory, Ledger, Products} from '../models/index.js';
 import {errorResponse, logger, successResponse} from '../utils/index.js';
 import {validationResult} from "express-validator";
 
-/**
- * @desc Add a new inventory entry (with batch management)
- * @route POST /api/v1/inventory
- */export const createInventory = async (req, res) => {
+export const createInventory = async (req, res) => {
     try {
         logger.info('Creating or updating inventory...');
         const {productId, companyId, vendorId, barcode, batches, createdBy} = req.body;
 
         // Validate product existence
         const productExists = await Products.findById(productId);
+        console.log('productExists', productExists)
         if (!productExists) {
             return errorResponse(res, 'Product not found.', 404);
         }
 
         // Check for existing inventory
         const existingInventory = await Inventory.findOne({productId, companyId, vendorId});
+        let totalQuantity = 0;
+        let ledgerDescription = '';
+        let ledgerDebitAmount = 0;
+        let debitCaption = '';
+        let creditCaption = '';
+
         if (existingInventory) {
             logger.info('Updating existing inventory...');
             console.log('batches', batches);
@@ -28,33 +32,66 @@ import {validationResult} from "express-validator";
             // Add new batch to existing batches
             existingInventory.batches.push(...newBatches);
 
-            // Update total quantity
+            // Calculate total quantity for the new batches
             const newBatchQuantity = newBatches.reduce((sum, batch) => sum + batch.quantity, 0);
             existingInventory.totalQuantity += newBatchQuantity;
 
             // Save updated inventory
             await existingInventory.save();
 
+            totalQuantity = newBatchQuantity;
+            ledgerDescription = `Updated inventory for Product: ${productId}`;
+            ledgerDebitAmount = newBatchQuantity *  productExists.price.unitPurchasePrice; // Assuming cost price is available in product
+            debitCaption = 'Inventory';
+            creditCaption = 'Vendor Payable';
             logger.info(`Inventory updated for Product: ${productId}`);
-            return successResponse(res, existingInventory, 'Inventory updated successfully');
+            successResponse(res, existingInventory, 'Inventory updated successfully');
+        } else {
+            logger.info('Creating new inventory...');
+            // Ensure batches is an array
+            const newBatches = Array.isArray(batches) ? batches : [batches];
+
+            // Calculate total quantity from new batches
+            totalQuantity = newBatches.reduce((sum, batch) => sum + batch.quantity, 0);
+
+            // Create new inventory record
+            const newInventory = await Inventory.create({
+                productId,
+                companyId,
+                vendorId,
+                barcode,
+                newBatches,
+                totalQuantity,
+                createdBy,
+            });
+
+            ledgerDescription = `Added inventory for Product: ${productId}`;
+            ledgerDebitAmount = totalQuantity *  productExists.price.unitPurchasePrice; // Assuming cost price is available in product
+            debitCaption = 'Inventory';
+            creditCaption = 'Vendor Payable';
+            logger.info(`Inventory added for Product: ${productId}`);
+            successResponse(res, newInventory, 'Inventory created successfully');
         }
 
-        // Calculate total quantity from new batches
-        const totalQuantity = batches.reduce((sum, batch) => sum + batch.quantity, 0);
+        // Add ledger entry
+        if (ledgerDebitAmount > 0) {
+            await Ledger.manageLedgerEntry({
+                companyId,
+                transactionType: 'Purchase',
+                description: ledgerDescription,
+                debitAmount: ledgerDebitAmount,
+                debitCaption: debitCaption,
+                creditCaption: creditCaption,
+                creditAmount: ledgerDebitAmount, // Vendor payable liability
+                linkedEntityId: vendorId,
+                referenceType: 'Inventory',
+                createdBy,
+            });
 
-        // Create new inventory record
-        const newInventory = await Inventory.create({
-            productId,
-            companyId,
-            vendorId,
-            barcode,
-            batches,
-            totalQuantity,
-            createdBy,
-        });
-
-        logger.info(`Inventory added for Product: ${productId}`);
-        return successResponse(res, newInventory, 'Inventory created successfully');
+            logger.info('Ledger entry created for inventory addition.');
+        }else{
+            logger.error(`Couldn't add Ledger Entry for inventory addition due to ledgerDebitAmount: ${ledgerDebitAmount}`)
+        }
     } catch (error) {
         logger.error('Error creating or updating inventory:', error);
         return errorResponse(res, error.message);
@@ -173,7 +210,7 @@ export const getAvailableInventory = async (req, res) => {
         }
 
         // Extract query parameters
-        const { companyId, includeBatches } = req.query;
+        const {companyId, includeBatches} = req.query;
 
         if (!companyId) {
             logger.error('Missing required query parameters: companyId.');
@@ -192,7 +229,7 @@ export const getAvailableInventory = async (req, res) => {
             productId: 1,
             companyId: 1,
             barcode: 1,
-            ...(includeBatches === 'true' && { batches: 1 }),
+            ...(includeBatches === 'true' && {batches: 1}),
         }).lean();
 
         if (!inventories || inventories.length === 0) {
@@ -201,7 +238,7 @@ export const getAvailableInventory = async (req, res) => {
         }
         // Fetch product titles
         const productIds = inventories.map(inv => inv.productId);
-        const products = await Products.find({ _id: { $in: productIds } }, { _id: 1, productName: 1 }).lean();
+        const products = await Products.find({_id: {$in: productIds}}, {_id: 1, productName: 1}).lean();
         const productMap = products.reduce((map, product) => {
             map[product._id] = product.productName;
             return map;
