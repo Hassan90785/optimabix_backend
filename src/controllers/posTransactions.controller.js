@@ -1,4 +1,4 @@
-import {Invoices, Ledger, Payments, POSTransaction} from '../models/index.js';
+import {Inventory, Invoices, Ledger, Payments, POSTransaction} from '../models/index.js';
 import {errorResponse, generatePDF, logger, successResponse} from '../utils/index.js';
 import mongoose from "mongoose";
 
@@ -62,6 +62,42 @@ export const createPOSTransaction = async (req, res) => {
             ],
             {session}
         );
+        // Update Inventory
+        for (const product of products) {
+            const { productId, quantity } = product;
+
+            // Fetch the inventory for the product
+            const inventory = await Inventory.findOne({ companyId, productId }).session(session);
+            if (!inventory) {
+                throw new Error(`Inventory not found for productId: ${productId}`);
+            }
+
+            // Apply FIFO logic to reduce quantities from batches
+            const batches = inventory.batches || [];
+            let remainingQuantity = quantity;
+
+            for (const batch of batches) {
+                if (remainingQuantity <= 0) break;
+                if (batch.quantity > 0) {
+                    const deduction = Math.min(batch.quantity, remainingQuantity);
+                    batch.quantity -= deduction;
+                    remainingQuantity -= deduction;
+                }
+            }
+
+            if (remainingQuantity > 0) {
+                throw new Error(`Insufficient stock for productId: ${productId}`);
+            }
+
+            // Update total quantity in inventory
+            inventory.totalQuantity -= quantity;
+
+            // Save updated inventory
+            await inventory.save({ session });
+        }
+
+        logger.info(`Inventory updated for transaction ${newTransaction.transactionNumber}`);
+
         /**
          * Invoice Handling
          */
