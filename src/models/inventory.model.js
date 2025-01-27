@@ -78,7 +78,7 @@ inventorySchema.pre(/^find/, function (next) {
 // Pre-save middleware to generate a barcode if not present
 inventorySchema.pre('save', function (next) {
     if (!this.barcode) {
-        this.barcode = `BC-${this.companyId}-${this.productId}-${uuidv4()}`; // Customize this logic if needed
+        this.barcode = `BC-${uuidv4()}`; // Customize this logic if needed
     }
     next();
 });
