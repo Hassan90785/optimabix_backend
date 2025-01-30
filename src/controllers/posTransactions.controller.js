@@ -255,15 +255,24 @@ export const createPOSTransaction = async (req, res) => {
  */
 export const getAllPOSTransactions = async (req, res) => {
     try {
-        const {companyId, page = 1, limit = 10} = req.query;
-        const filter = {companyId, isDeleted: false};
+        const { companyId, startDate, endDate, page = 1, limit = 10 } = req.query;
 
+        const filter = { companyId, isDeleted: false };
+
+        if (startDate || endDate) {
+            filter.date = {};
+            if (startDate) filter.date.$gte = new Date(new Date(startDate).setHours(0, 0, 0, 0));
+            if (endDate) filter.date.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
+        }
+        console.log('filter:: ', filter)
         const transactions = await POSTransaction.find(filter)
             .populate('products.productId')
+            .sort({ date: -1 })
             .skip((page - 1) * limit)
             .limit(Number(limit));
-
+        console.log('transactions:: ', transactions)
         const totalRecords = await POSTransaction.countDocuments(filter);
+
         return successResponse(res, {
             transactions,
             totalRecords,
@@ -275,6 +284,7 @@ export const getAllPOSTransactions = async (req, res) => {
         return errorResponse(res, error.message);
     }
 };
+
 
 /**
  * @desc Get a single POS transaction by ID

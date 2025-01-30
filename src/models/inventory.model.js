@@ -12,9 +12,6 @@ const inventorySchema = new mongoose.Schema({
             ref: 'Products',
             required: true
         },
-        barcode: {
-            type: String
-        },
         batches: [
             {
                 quantity: {
@@ -32,7 +29,10 @@ const inventorySchema = new mongoose.Schema({
                 dateAdded: {
                     type: Date,
                     default: Date.now
-                }
+                },
+                barcode: {
+                    type: String,
+                },
             }
         ],
         totalQuantity: {
@@ -67,7 +67,7 @@ const inventorySchema = new mongoose.Schema({
 
 // Indexing for optimized lookups
 inventorySchema.index({companyId: 1, productId: 1});
-inventorySchema.index({barcode: 1});
+inventorySchema.index({'batches.barcode': 1});
 inventorySchema.index({isDeleted: 1});
 
 // Pre-query middleware to exclude soft-deleted records
@@ -77,9 +77,11 @@ inventorySchema.pre(/^find/, function (next) {
 });
 // Pre-save middleware to generate a barcode if not present
 inventorySchema.pre('save', function (next) {
-    if (!this.barcode) {
-        this.barcode = `BC-${uuidv4()}`; // Customize this logic if needed
-    }
+    this.batches.forEach((batch) => {
+        if (!batch.barcode) {
+            batch.barcode = `${uuidv4()}`;
+        }
+    });
     next();
 });
 // Method for soft deletion

@@ -125,8 +125,8 @@ productSchema.methods.softDelete = async function (deletedBy) {
 // Method to auto-generate SKU if not provided
 productSchema.methods.generateSKU = function () {
     const randomNum = Math.floor(1000 + Math.random() * 9000);
-    console.log('this.productName.replace(/\s+/g, \'\').substring(0, 5).toUpperCase()', this.productName.replace(/\s+/g, '').substring(0, 5).toUpperCase())
     this.sku = `${this.productName.replace(/\s+/g, '').substring(0, 5).toUpperCase()}-${randomNum}`;
+    console.log('Generated SKU:', this.sku);
 };
 
 const Products = mongoose.model('Products', productSchema);

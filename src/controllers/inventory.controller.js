@@ -41,16 +41,17 @@ export const createInventory = async (req, res) => {
 
             totalQuantity = newBatchQuantity;
             ledgerDescription = `Updated inventory for Product: ${productId}`;
-            ledgerDebitAmount = newBatchQuantity *  productExists.price.unitPurchasePrice; // Assuming cost price is available in product
+            ledgerDebitAmount = newBatchQuantity * productExists.price.unitPurchasePrice; // Assuming cost price is available in product
             debitCaption = 'Inventory';
             creditCaption = 'Vendor Payable';
             logger.info(`Inventory updated for Product: ${productId}`);
             successResponse(res, existingInventory, 'Inventory updated successfully');
         } else {
             logger.info('Creating new inventory...');
+            console.log('batches', batches);
             // Ensure batches is an array
             const newBatches = Array.isArray(batches) ? batches : [batches];
-
+            console.log('newBatches', newBatches);
             // Calculate total quantity from new batches
             totalQuantity = newBatches.reduce((sum, batch) => sum + batch.quantity, 0);
 
@@ -59,14 +60,13 @@ export const createInventory = async (req, res) => {
                 productId,
                 companyId,
                 vendorId,
-                barcode,
-                newBatches,
+                batches: newBatches,
                 totalQuantity,
                 createdBy,
             });
-
+            console.log('newInventory:', newInventory);
             ledgerDescription = `Added inventory for Product: ${productId}`;
-            ledgerDebitAmount = totalQuantity *  productExists.price.unitPurchasePrice; // Assuming cost price is available in product
+            ledgerDebitAmount = totalQuantity * productExists.price.unitPurchasePrice; // Assuming cost price is available in product
             debitCaption = 'Inventory';
             creditCaption = 'Vendor Payable';
             logger.info(`Inventory added for Product: ${productId}`);
@@ -89,7 +89,7 @@ export const createInventory = async (req, res) => {
             });
 
             logger.info('Ledger entry created for inventory addition.');
-        }else{
+        } else {
             logger.error(`Couldn't add Ledger Entry for inventory addition due to ledgerDebitAmount: ${ledgerDebitAmount}`)
         }
     } catch (error) {
@@ -110,7 +110,7 @@ export const getAllInventory = async (req, res) => {
         const filter = {companyId, isDeleted: false};
 
         const inventoryItems = await Inventory.find(filter)
-            .populate('productId')
+            .populate('productId vendorId')
             .skip((page - 1) * limit)
             .limit(Number(limit));
 
