@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import Counter from "./counter.model.js";
 
 const posTransactionSchema = new mongoose.Schema({
     companyId: {
@@ -13,6 +14,11 @@ const posTransactionSchema = new mongoose.Schema({
     transactionNumber: {
         type: String,
         trim: true
+    },
+    // New auto-increment field
+    counterNumber: {
+        type: Number, // We'll store a numeric sequence
+        unique: true  // Optional, but recommended if you want strict uniqueness
     },
     products: [
         {
@@ -132,6 +138,18 @@ posTransactionSchema.pre('save', async function(next) {
         }
 
         this.transactionNumber = `${prefix}-${counter.toString().padStart(6, '0')}`; // Ensure a 6-digit counter
+        try {
+            const result = await Counter.findOneAndUpdate(
+                { name: 'POSTransactionCounter' }, // or any unique name you want
+                { $inc: { seq: 1 } },             // increment seq by 1
+                { new: true, upsert: true }       // create if not existing
+            );
+
+            // Assign the new sequence value to counterNumber
+            this.counterNumber = result.seq;
+        } catch (error) {
+            return next(error);
+        }
     }
     next();
 });

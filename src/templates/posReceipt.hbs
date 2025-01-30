@@ -1,47 +1,307 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>POS Transaction Receipt</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receipt</title>
     <style>
-        body { font-family: Arial, sans-serif; }
-        .header { text-align: center; margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f4f4f4; }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            font-size: 14px; /* Decreased font size */
+        }
+
+        .receipt {
+            width: 400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .company-details-container {
+            display: flex;
+            align-items: center;
+            gap: 22px;
+        }
+
+        .company-details {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: start;
+            height: 95px;
+            margin-bottom: 20px;
+        }
+
+        .company-name {
+            font-size: 28px;
+            font-weight: 800;
+            text-transform: uppercase;
+            margin: 0;
+        }
+
+        .company-name-subheading {
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .shop-details {
+            margin: 5px 0 0 0;
+            text-align: left;
+        }
+
+        .imageWidth {
+            width: 75px;
+            height: 75px;
+        }
+
+        .bill-detail-sec {
+            border-top: 1px dashed black;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .bill-detail-sec h4 {
+            margin: 0;
+        }
+
+        .bill-id-sec {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            margin-top: 5px;
+        }
+
+        .bill-id {
+            font-weight: 800;
+        }
+
+        .bill-date {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            margin-top: 5px;
+        }
+
+        .bill-time {
+            margin-left: 20px;
+        }
+
+        h1, h2, p {
+            text-align: center;
+            font-size: 16px;
+        }
+
+        .products-table {
+            width: 100%;
+            border-collapse: separate;
+            text-align: left;
+            border-spacing: 0 6px;
+        }
+
+        .products-table th, .products-table td {
+            text-transform: uppercase;
+            padding: 0;
+            text-align: center;
+
+        }
+
+        .products-table th {
+            border-top: 1px solid #ddd;
+            border-bottom: 1px solid #ddd;
+            font-weight: bold;
+        }
+
+        .items-summary-sec {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 5px;
+        }
+
+        .items-summary-sec h5, span {
+            margin: 0;
+        }
+
+        .summary-gross {
+            margin-top: -35px;
+            display: flex;
+            justify-content: end;
+        }
+
+        .gross-sec {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .gross-sec span {
+            border-top: 1px solid #777872;
+            width: 90px;
+            text-align: end;
+            font-weight: bold;
+        }
+
+        .summary-discount {
+            margin-top: -25px;
+            display: flex;
+            justify-content: end;
+        }
+
+        .discount-sec {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .discount-sec span {
+            width: 90px;
+            text-align: end;
+            font-weight: bold;
+        }
+
+
+        .summary-tax {
+            margin-top: -25px;
+            display: flex;
+            justify-content: end;
+        }
+
+        .tax-sec {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .tax-sec span {
+            width: 90px;
+            text-align: end;
+            font-weight: bold;
+        }
+
+
+        .summary-total {
+            margin-top: -25px;
+            display: flex;
+            justify-content: end;
+        }
+
+        .total-sec {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .total-sec span {
+            width: 90px;
+            background-color: #5A5A59;
+            color: #fff;
+            text-align: center;
+            border-radius: 1px;
+            padding: 5px;
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
     </style>
 </head>
 <body>
-<div class="header">
-    <h1>Transaction Receipt</h1>
-    <p>Transaction #: {{transactionNumber}}</p>
-    <p>Date: {{date}}</p>
-</div>
-<table>
-    <thead>
-    <tr>
-        <th>Product</th>
-        <th>Quantity</th>
-        <th>Unit Price</th>
-        <th>Total Price</th>
-    </tr>
-    </thead>
-    <tbody>
-    {{#each products}}
-        <tr>
-            <td>{{this.productId}}</td>
-            <td>{{this.quantity}}</td>
-            <td>{{this.unitPrice}}</td>
-            <td>{{this.totalPrice}}</td>
+<div class="receipt">
+    <div class="company-details-container">
+        <img src="{{company.logo}}" alt="Company Logo"
+             class="img-fluid imageWidth mx-auto d-block w-25"/>
+        <div class="company-details">
+            <h1 class="company-name">{{company.name}}</h1>
+            <h4 class="company-name-subheading">{{company.name}}</h4>
+            <p class="shop-details">{{company.contactDetails.address.street }}, {{company.contactDetails.address.state}}</p>
+        </div>
+    </div>
+    <div>
+        <h1>SALE INVOICE</h1>
+    </div>
+    <div class="bill-detail-sec">
+        <div class="bill-id-sec">
+            <h4>Bill #:</h4>
+            <span class="bill-id">{{billId}}</span>
+        </div>
+        <div class="bill-date">
+            <h4>Date:</h4>
+            <span>{{date}}</span>
+        </div>
+    </div>
+    <!-- Products Table -->
+    <table class="products-table">
+        <thead>
+        <tr class="fw-bold">
+            <th>Qty</th>
+            <th>Products</th>
+            <th>RATE</th>
+            <th>AMT</th>
         </tr>
-    {{/each}}
-    </tbody>
-</table>
-<p>Subtotal: {{subTotal}}</p>
-<p>Tax: {{taxAmount}}</p>
-<p>Discount: {{discountAmount}}</p>
-<p>Total Payable: {{totalPayable}}</p>
-<p>Paid Amount: {{paidAmount}}</p>
-<p>Change Given: {{changeGiven}}</p>
-<p>Payment Method: {{paymentMethod}}</p>
+        </thead>
+        <tbody>
+        {{#each products}}
+            <tr>
+                <td>{{quantity}}</td>
+                <td>{{productName}}</td>
+                <td>PKR {{unitPrice}}</td>
+                <td>PKR {{totalPrice}}</td>
+            </tr>
+        {{/each}}
+        </tbody>
+    </table>
+
+    <div>
+        <div class="items-summary-sec">
+            <h5>Items:</h5>
+            <span>{{size}}</span>
+        </div>
+    </div>
+
+    <!-- Summary Section -->
+    <div class="summary-gross">
+        <div class="gross-sec">
+            <h5>Gross:</h5>
+            <span>PKR {{subTotal}}</span>
+        </div>
+    </div>
+
+    <div class="summary-discount">
+        <div class="discount-sec">
+            <h5>Discount:</h5>
+            <span>PKR {{discountAmount}}</span>
+        </div>
+    </div>
+    <div class="summary-tax">
+        <div class="tax-sec">
+            <h5>Tax:</h5>
+            <span>PKR {{taxAmount}}</span>
+        </div>
+    </div>
+
+    <div class="summary-total">
+        <div class="total-sec">
+            <h5>Total Bill:</h5>
+            <span>PKR {{totalPayable}}</span>
+        </div>
+    </div>
+
+    <!-- Footer Section -->
+    <div class="footer">
+        <p>Thank you for your purchase!</p>
+        <p>Contact: {{company.contactDetails.phone}} | Email: {{company.contactDetails.email}}</p>
+    </div>
+</div>
 </body>
 </html>

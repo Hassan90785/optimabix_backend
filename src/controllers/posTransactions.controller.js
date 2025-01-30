@@ -1,4 +1,4 @@
-import {Inventory, Invoices, Ledger, Payments, POSTransaction} from '../models/index.js';
+import {Companies, Inventory, Invoices, Ledger, Payments, POSTransaction} from '../models/index.js';
 import {errorResponse, generatePDF, logger, successResponse} from '../utils/index.js';
 import mongoose from "mongoose";
 
@@ -43,6 +43,7 @@ export const createPOSTransaction = async (req, res) => {
             {session}
         );
         logger.info(`POS Transaction created: ${newTransaction.transactionNumber}`);
+
         /**
          * Payment Handling
          */
@@ -203,24 +204,59 @@ export const createPOSTransaction = async (req, res) => {
 
         // Commit the transaction
         await session.commitTransaction();
+
+
+       const tempTransaction= await newTransaction.populate({
+            path: 'products.productId',
+            select: 'productName sku' // whatever fields you want from Product
+        });
+
+        const transactionObj = tempTransaction.toObject();
+
+        transactionObj.products = transactionObj.products.map((item) => {
+            // item.productId now has { _id, productName, sku, ... }
+            return {
+                productId: item.productId._id,  // keep the original ID if you want
+                productName: item.productId.productName,
+                sku: item.productId.sku,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                totalPrice: item.totalPrice,
+                batchId: item.batchId,
+                _id: item._id,
+            };
+        });
+
+        console.log('Enriched transaction:', transactionObj);
+
+
+
+
+        const company = await Companies.findById(companyId)
+            .select('name registrationNumber contactDetails logo').lean();
+        console.log(JSON.stringify(company, null, 2))
         // Generate PDF receipt
         const receiptData = {
-            transactionNumber: newTransaction.transactionNumber,
             date: new Date().toLocaleString(),
-            companyId,
-            products,
+            company,
+            products: transactionObj.products,
+            size: transactionObj.products.length,// includes productName and sku
             discountAmount,
             taxAmount,
             subTotal,
             totalPayable,
+            billId: transactionObj.counterNumber,
             paidAmount,
             changeGiven,
             paymentMethod,
         };
+
         /**
          * PDF handling
          * @type {string}
          */
+        console.log('receiptData:: ', receiptData)
+
         const receiptPath = `src/uploads/receipts/${newTransaction.transactionNumber}.pdf`;
         const pdfPath = await generatePDF('posReceipt', receiptData, receiptPath);
 

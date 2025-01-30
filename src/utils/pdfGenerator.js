@@ -10,7 +10,7 @@ const generatePDF = async (templateName, data, outputPath) => {
         const templateContent = await fs.readFile(templatePath, 'utf-8');
         const compiledTemplate = handlebars.compile(templateContent);
         const html = compiledTemplate(data);
-
+        console.log('html:::\n', html)
         const browser = await puppeteer.launch();
         const page = await browser.newPage();
         await page.setContent(html);
@@ -18,8 +18,9 @@ const generatePDF = async (templateName, data, outputPath) => {
         // Custom page size for 80mm x 297mm (48-column thermal paper)
         await page.pdf({
             path: outputPath,
+            printBackground: true,
+            preferCSSPageSize: true,
             width: '80mm',
-            height: '297mm',
         });
 
         await browser.close();
