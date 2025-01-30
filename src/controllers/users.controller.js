@@ -1,7 +1,8 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { Users } from '../models/index.js';
+import {Companies, Users} from '../models/index.js';
 import { successResponse, errorResponse, logger } from '../utils/index.js';
+import * as _ from "lodash-es";
 
 /**
  * @desc Create a new user (Registration)
@@ -46,26 +47,30 @@ export const createUser = async (req, res) => {
 export const loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
-        const user = await Users.findOne({ email });
+        const user = await Users.findOne({ email }).lean();
 
         if (!user) {
-            return errorResponse(res, 'Invalid credentials.', 401);
+            return errorResponse(res, 'Invalid credentials.', 200);
         }
 
         // Compare the password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return errorResponse(res, 'Invalid credentials.', 401);
+            return errorResponse(res, 'Invalid credentials.', 200);
         }
+
         console.log('user', user);
 
         // Generate JWT token
         const token = jwt.sign({ id: user._id, role: user.role.roleName }, process.env.JWT_SECRET, {
             expiresIn: '7d'
         });
-
-        logger.info(`User logged in: ${user.username}`);
-        return successResponse(res, { token, user }, 'Login successful');
+        const company = await Companies.findById(user.companyId._id).lean();
+        const resp = _.cloneDeep(user);
+        resp['company'] = _.cloneDeep(company);
+        console.log('resp:', resp)
+        logger.info(`User logged in: ${resp.username}`);
+        return successResponse(res, { token, user:resp }, 'Login successful');
     } catch (error) {
         logger.error('Error during login:', error);
         return errorResponse(res, error.message);

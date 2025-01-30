@@ -3,7 +3,7 @@ const successResponse = (res, data, message = 'Operation successful') => {
 };
 
 const errorResponse = (res, error, statusCode = 500) => {
-    return res.status(statusCode).json({ success: false, message: error.message || 'An error occurred' });
+    return res.status(statusCode).json({ success: false, message: error || 'An error occurred' });
 };
 
 export { successResponse, errorResponse };
