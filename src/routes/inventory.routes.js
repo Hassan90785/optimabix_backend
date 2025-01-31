@@ -3,7 +3,7 @@ import {
     createInventory,
     getAllInventory,
     getAvailableInventory,
-    getInventoryById,
+    getInventoryById, printBarCodes,
     softDeleteInventory,
     updateInventory
 } from '../controllers/inventory.controller.js';
@@ -19,6 +19,13 @@ const router = express.Router();
  * @access Private
  */
 router.post('/', authMiddleware, validationMiddleware, createInventory);
+
+/**
+ * @route POST /api/v1/inventory
+ * @desc Create new inventory record
+ * @access Private
+ */
+router.post('/printbarcode', authMiddleware, validationMiddleware, printBarCodes);
 
 /**
  * @route GET /api/v1/inventory

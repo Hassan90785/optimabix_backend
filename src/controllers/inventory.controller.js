@@ -1,5 +1,5 @@
 import {Inventory, Ledger, Products} from '../models/index.js';
-import {errorResponse, logger, successResponse} from '../utils/index.js';
+import {errorResponse, generatePDF, logger, successResponse} from '../utils/index.js';
 import {validationResult} from "express-validator";
 
 export const createInventory = async (req, res) => {
@@ -94,6 +94,43 @@ export const createInventory = async (req, res) => {
         }
     } catch (error) {
         logger.error('Error creating or updating inventory:', error);
+        return errorResponse(res, error.message);
+    }
+};
+
+import moment from 'moment';
+
+export const printBarCodes = async (req, res) => {
+    try {
+        logger.info('Printing barcodes...');
+        const { quantity, sellingPrice, mgf_dt, expiry_dt, barcode, productName } = req.body;
+        const barcodePath = `src/uploads/products/${productName.replace(/\s+/g, '_')}.pdf`;
+
+        console.log('req.body:', req.body);
+
+        // ✅ Format the dates properly
+        const formattedMgfDate = moment(mgf_dt).format("YYYY-MM-DD"); // "2025-02-03"
+        const formattedExpiryDate = moment(expiry_dt).format("YYYY-MM-DD"); // "2025-02-11"
+
+        // ✅ Expand `quantity` into an array
+        const barcodeData = {
+            productName,
+            barcode,
+            sellingPrice,
+            barcodes: Array.from({ length: quantity }, () => ({
+                mgf_dt: formattedMgfDate,
+                expiry_dt: formattedExpiryDate
+            }))
+        };
+
+        console.log('Processed barcodeData:', JSON.stringify(barcodeData, null, 2));
+
+        // ✅ Generate the PDF
+        const pdfPath = await generatePDF('barcodes', barcodeData, barcodePath);
+        return successResponse(res, { pdfPath }, 'Barcode PDF generated successfully');
+
+    } catch (error) {
+        logger.error('Error Barcode PDF generation:', error);
         return errorResponse(res, error.message);
     }
 };

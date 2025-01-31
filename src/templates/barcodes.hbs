@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barcode</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+        .barcode-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            page-break-inside: avoid; /* Prevents splitting */
+        }
+        .barcode-section {
+            width: 60mm; /* Reduce width */
+            height: 30mm; /* Reduce height */
+            border: 1.5px solid black;
+            margin: 8px auto;
+            padding: 3px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            page-break-inside: avoid; /* Prevent barcode from splitting */
+            page-break-after: auto; /* Ensures smooth flow */
+        }
+        .product-name {
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .barcode {
+            width: 80%; /* Reduce width */
+            height: 15mm; /* Reduce height */
+        }
+        .details {
+            font-size: 9px;
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+        .details div {
+            flex: 1;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<div class="barcode-container">
+{{#each barcodes}}
+    <div class="barcode-section">
+        <div class="product-name">{{../productName}}</div>
+        <img class="barcode" src="https://barcode.tec-it.com/barcode.ashx?data={{../barcode}}&code=Code128&dpi=96" alt="Barcode">
+        <div class="details">
+            <div>Mfg: {{mgf_dt}}</div>
+            <div><strong>Price: {{../sellingPrice}}</strong></div>
+            <div>Exp: {{expiry_dt}}</div>
+        </div>
+    </div>
+{{/each}}
+</div>
+</body>
+</html>

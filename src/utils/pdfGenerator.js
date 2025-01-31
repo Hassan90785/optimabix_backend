@@ -10,7 +10,6 @@ const generatePDF = async (templateName, data, outputPath) => {
         const templateContent = await fs.readFile(templatePath, 'utf-8');
         const compiledTemplate = handlebars.compile(templateContent);
         const html = compiledTemplate(data);
-        console.log('html:::\n', html)
         const browser = await puppeteer.launch();
         const page = await browser.newPage();
         await page.setContent(html);
