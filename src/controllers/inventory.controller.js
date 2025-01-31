@@ -254,11 +254,11 @@ export const getAvailableInventory = async (req, res) => {
                 productId: inventory.productId,
                 name: productMap[inventory.productId] || 'Unknown Product',
                 companyId: inventory.companyId,
-                barcode: inventory.barcode,
                 totalQuantity: inventory.totalQuantity,
                 firstAvailableBatch: firstBatch ? {
                     batchId: firstBatch._id,
                     quantity: firstBatch.quantity,
+                    barcode: firstBatch.barcode,
                     purchasePrice: firstBatch.purchasePrice,
                     sellingPrice: firstBatch.sellingPrice,
                     dateAdded: firstBatch.dateAdded,
