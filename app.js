@@ -29,8 +29,9 @@ connectDB();
 app.use(express.json());
 
 // ✅ Set up Static Folder for Uploads
-const uploadsPath = path.resolve('src/uploads'); // Resolve absolute path to 'src/uploads'
+const uploadsPath = path.join(__dirname, 'uploads');
 app.use('/uploads', express.static(uploadsPath)); // Serve files under '/uploads'
+console.log("Serving static files from:", uploadsPath);
 
 // ✅ Register API Routes with Versioning
 app.use('/api/v1', routes);
