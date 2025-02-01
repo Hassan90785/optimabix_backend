@@ -105,7 +105,7 @@ export const printBarCodes = async (req, res) => {
     try {
         logger.info('Printing barcodes...');
         const { quantity, sellingPrice, mgf_dt, expiry_dt, barcode, productName } = req.body;
-        const barcodePath = `src/uploads/products/${productName.replace(/\s+/g, '_')}.pdf`;
+        const barcodePath = `${process.env.UPLOAD_PATH}/${productName.replace(/\s+/g, '_')}.pdf`;
 
         console.log('req.body:', req.body);
 
