@@ -31,12 +31,12 @@ const userSchema = new mongoose.Schema({
     role: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Roles',
-        required: true
+        default: null
     },
     companyId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Companies',
-        required: true
+        default: null
     },
     accessStatus: {
         type: String,

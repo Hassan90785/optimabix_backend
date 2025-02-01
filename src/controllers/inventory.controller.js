@@ -99,6 +99,7 @@ export const createInventory = async (req, res) => {
 };
 
 import moment from 'moment';
+import {softErrorResponse} from "../utils/responseHandler.js";
 
 export const printBarCodes = async (req, res) => {
     try {
@@ -271,7 +272,7 @@ export const getAvailableInventory = async (req, res) => {
 
         if (!inventories || inventories.length === 0) {
             logger.warn(`No inventory found for Company: ${companyId}`);
-            return errorResponse(res, 'No inventory found');
+            return softErrorResponse(res,[], 'No inventory found');
         }
         // Fetch product titles
         const productIds = inventories.map(inv => inv.productId);
