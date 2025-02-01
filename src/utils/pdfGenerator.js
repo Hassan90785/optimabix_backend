@@ -10,7 +10,10 @@ const generatePDF = async (templateName, data, outputPath) => {
         const templateContent = await fs.readFile(templatePath, 'utf-8');
         const compiledTemplate = handlebars.compile(templateContent);
         const html = compiledTemplate(data);
-        const browser = await puppeteer.launch();
+        const browser = await puppeteer.launch({
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+
         const page = await browser.newPage();
         await page.setContent(html);
 
