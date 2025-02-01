@@ -46,8 +46,8 @@ export const createUser = async (req, res) => {
  */
 export const loginUser = async (req, res) => {
     try {
-        const { email, password } = req.body;
-        const user = await Users.findOne({ email }).lean();
+        const { username, password } = req.body;
+        const user = await Users.findOne({ username }).lean();
 
         if (!user) {
             return errorResponse(res, 'Invalid credentials.', 200);
@@ -62,7 +62,7 @@ export const loginUser = async (req, res) => {
         console.log('user', user);
 
         // Generate JWT token
-        const token = jwt.sign({ id: user._id, role: user.role.roleName }, process.env.JWT_SECRET, {
+        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
             expiresIn: '7d'
         });
         const company = await Companies.findById(user.companyId._id).lean();

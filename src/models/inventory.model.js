@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import {v4 as uuidv4} from "uuid";
+import {nanoid} from "nanoid";
 
 const inventorySchema = new mongoose.Schema({
         companyId: {
@@ -29,6 +30,14 @@ const inventorySchema = new mongoose.Schema({
                 dateAdded: {
                     type: Date,
                     default: Date.now
+                },
+                mgf_dt: {
+                    type: Date,
+                    default: null
+                },
+                expiry_dt: {
+                    type: Date,
+                    default: null
                 },
                 barcode: {
                     type: String,
@@ -75,11 +84,11 @@ inventorySchema.pre(/^find/, function (next) {
     this.where({isDeleted: false});
     next();
 });
-// Pre-save middleware to generate a barcode if not present
+// Generate a shorter 8-character barcode
 inventorySchema.pre('save', function (next) {
     this.batches.forEach((batch) => {
         if (!batch.barcode) {
-            batch.barcode = `${uuidv4()}`;
+            batch.barcode = nanoid(12); // Example: "A1B2C3D4"
         }
     });
     next();
