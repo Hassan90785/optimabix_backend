@@ -26,8 +26,9 @@ const generatePDF = async (templateName, data, outputPath) => {
         });
 
         await browser.close();
-        // Remove 'src' from the path
-        const publicPath = outputPath.replace(/^src[\\/]/, ''); // Remove 'src/' or 'src\\'
+
+        const publicPath = path.basename(outputPath);
+
 
         logger.info(`PDF is generated at : ${outputPath}`)
         return publicPath;
