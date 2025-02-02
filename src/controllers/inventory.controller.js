@@ -189,7 +189,7 @@ export const getInventoryById = async (req, res) => {
  */
 export const updateInventory = async (req, res) => {
     try {
-        const {batches} = req.body;
+        const {batches,createdBy,productId,vendorId} = req.body;
 
         const inventory = await Inventory.findById(req.params.id);
         if (!inventory) {
@@ -198,8 +198,10 @@ export const updateInventory = async (req, res) => {
 
         // Update batch data and total quantity
         inventory.batches = batches;
-        inventory.totalQuantity = batches.reduce((sum, batch) => sum + batch.quantity, 0);
-        inventory.updatedBy = req.user._id;
+        inventory.totalQuantity = batches.quantity;
+        inventory.updatedBy = createdBy;
+        inventory.productId = productId;
+        inventory.vendorId = vendorId;
 
         await inventory.save();
         logger.info(`Inventory updated for Product ID: ${inventory.productId}`);

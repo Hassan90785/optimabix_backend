@@ -95,7 +95,7 @@ export const getEntityById = async (req, res) => {
  */
 export const updateEntity = async (req, res) => {
     try {
-        const { entityType, entityName, contactPerson, billingAddress, shippingAddress, taxInformation } = req.body;
+        const { entityType, entityName, contactPerson, billingAddress, shippingAddress, taxInformation, createdBy } = req.body;
 
         const updatedEntity = await Entities.findByIdAndUpdate(
             req.params.id,
@@ -106,7 +106,7 @@ export const updateEntity = async (req, res) => {
                 billingAddress,
                 shippingAddress,
                 taxInformation,
-                updatedBy: req.user._id
+                updatedBy: createdBy
             },
             { new: true, runValidators: true }
         );
