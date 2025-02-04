@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Receipt</title>
     <style>
-        /* Base & Global Resets */
         * {
             margin: 0;
             padding: 0;
@@ -19,13 +18,11 @@
         h1, h2, h4, p {
             margin: 0;
         }
-        /* Only h1, h2, and p are centered and share font-size 16px */
         h1, h2, p {
             text-align: center;
             font-size: 16px;
         }
 
-        /* Container */
         .receipt {
             width: 400px;
             margin: 0 auto;
@@ -35,69 +32,46 @@
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
 
-        /* Company Details */
         .company-details-container {
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 22px;
+            text-align: center;
+            margin-bottom: 10px;
         }
         .imageWidth {
             width: 75px;
             height: 75px;
         }
         .company-details {
-            margin-top: 20px;
-            margin-bottom: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            height: 95px;
+            margin-top: 10px;
         }
         .company-name {
             font-size: 23px;
             font-weight: 800;
             text-transform: uppercase;
         }
-        .company-name-subheading {
-            font-size: 14px;
-        }
         .shop-details {
             margin-top: 5px;
-            text-align: left;
         }
 
-        /* Bill Section */
         .bill-detail-sec {
             border-top: 1px dashed black;
             display: flex;
             justify-content: space-between;
             align-items: center;
-        }
-        .bill-id-sec, .bill-date {
-            display: flex;
-            gap: 5px;
-            align-items: center;
-            margin-top: 5px;
-        }
-        .bill-id {
-            font-weight: 800;
-        }
-        .bill-time {
-            margin-left: 20px;
+            margin-top: 10px;
         }
 
-        /* Products Table */
         .products-table {
             width: 100%;
             border-collapse: separate;
-            border-spacing: 0 6px; /* space between rows */
-            text-align: left;
+            border-spacing: 0 6px;
+            text-align: center;
             margin-top: 8px;
         }
-        .products-table th,
-        .products-table td {
+        .products-table th, .products-table td {
             padding: 0;
-            text-align: center;
             text-transform: uppercase;
         }
         .products-table th {
@@ -106,62 +80,27 @@
             font-weight: bold;
         }
 
-        /* Item Summary */
-        .items-summary-sec {
+        .summary-section {
+            margin-top: 10px;
+        }
+        .summary-line {
             display: flex;
-            align-items: center;
-            gap: 10px;
+            justify-content: space-between;
+            font-weight: bold;
             margin-top: 5px;
         }
-        .items-summary-sec h5,
-        .items-summary-sec span {
-            margin: 0;
-        }
-
-        /* Summaries: unify repeated flex usage, then adjust margin-top individually */
-        .summary-gross, .summary-discount, .summary-tax, .summary-total {
-            display: flex;
-            justify-content: flex-end;
-        }
-        .summary-gross {
-            margin-top: 10px;
-        }
-        .summary-discount, .summary-tax, .summary-total {
-            margin-top: 10px;
-        }
-        .gross-sec, .discount-sec, .tax-sec, .total-sec {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 20px;
-        }
-        /* Different span styles per section */
-        .gross-sec span {
-            border-top: 1px solid #777872;
-            width: 90px;
-            text-align: end;
-            font-weight: bold;
-        }
-        .discount-sec span, .tax-sec span {
-            width: 90px;
-            text-align: end;
-            font-weight: bold;
-        }
         .total-sec span {
-            width: 90px;
             background-color: #5A5A59;
             color: #fff;
             text-align: center;
-            border-radius: 1px;
             padding: 5px;
-            font-weight: bold;
+            border-radius: 1px;
         }
 
-        /* Footer */
         .footer {
             text-align: center;
-            margin-top: 20px;
-            font-size: 0.9em;
+            margin-top: 15px;
+            font-size: 12px;
         }
     </style>
 </head>
@@ -171,29 +110,23 @@
         <img src="{{company.logo}}" alt="Company Logo" class="imageWidth"/>
         <div class="company-details">
             <h1 class="company-name">{{company.name}}</h1>
-            <h4 class="company-name-subheading">{{company.name}}</h4>
-            <p class="shop-details">
-                {{company.contactDetails.address.street}}, {{company.contactDetails.address.state}}
-            </p>
+            <p class="shop-details">{{company.contactDetails.address.street}}, {{company.contactDetails.address.city}}</p>
         </div>
     </div>
 
-    <div>
-        <h1>SALE INVOICE</h1>
-    </div>
+    <h1>SALE INVOICE</h1>
 
     <div class="bill-detail-sec">
-        <div class="bill-id-sec">
+        <div>
             <h4>Bill #:</h4>
             <span class="bill-id">{{billId}}</span>
         </div>
-        <div class="bill-date">
+        <div>
             <h4>Date:</h4>
             <span>{{date}}</span>
         </div>
     </div>
 
-    <!-- Products Table -->
     <table class="products-table">
         <thead>
         <tr>
@@ -215,44 +148,37 @@
         </tbody>
     </table>
 
-    <div class="items-summary-sec">
-        <h5>Items:</h5>
-        <span>{{size}}</span>
-    </div>
-
-    <!-- Summary Section -->
-    <div class="summary-gross">
-        <div class="gross-sec">
+    <div class="summary-section">
+        <div class="summary-line">
             <h5>Gross:</h5>
             <span>PKR {{subTotal}}</span>
         </div>
-    </div>
-
-    <div class="summary-discount">
-        <div class="discount-sec">
+        <div class="summary-line">
             <h5>Discount:</h5>
             <span>PKR {{discountAmount}}</span>
         </div>
-    </div>
-
-    <div class="summary-tax">
-        <div class="tax-sec">
+        <div class="summary-line">
             <h5>Tax:</h5>
             <span>PKR {{taxAmount}}</span>
         </div>
-    </div>
-
-    <div class="summary-total">
-        <div class="total-sec">
+        <div class="summary-line total-sec">
             <h5>Total Bill:</h5>
             <span>PKR {{totalPayable}}</span>
         </div>
+        <div class="summary-line">
+            <h5>Paid Amount:</h5>
+            <span>PKR {{paidAmount}}</span>
+        </div>
+        <div class="summary-line">
+            <h5>Balance:</h5>
+            <span>PKR {{changeGiven}}</span>
+        </div>
     </div>
 
-    <!-- Footer Section -->
     <div class="footer">
         <p>Thank you for your purchase!</p>
-        <p>Contact: {{company.contactDetails.phone}} | Email: {{company.contactDetails.email}}</p>
+        <p>{{company.contactDetails.phone}} , {{company.contactDetails.cell}}</p>
+        <p>{{company.contactDetails.web}}</p>
     </div>
 </div>
 </body>

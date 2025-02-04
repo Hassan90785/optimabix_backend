@@ -257,7 +257,7 @@ export const createPOSTransaction = async (req, res) => {
          */
         console.log('receiptData:: ', receiptData)
 
-        const receiptPath = `src/uploads/receipts/${newTransaction.transactionNumber}.pdf`;
+        const receiptPath = `${process.env.UPLOAD_PATH}/${newTransaction.transactionNumber}.pdf`;
         const pdfPath = await generatePDF('posReceipt', receiptData, receiptPath);
 
         await session.endSession();

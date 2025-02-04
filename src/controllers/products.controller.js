@@ -16,6 +16,7 @@ export const createProduct = async (req, res) => {
             modelNumber,
             price,
             vendorId,
+            createdBy,
             companyId,
             batches
         } = req.body;
@@ -38,6 +39,7 @@ export const createProduct = async (req, res) => {
             price,
             vendorId,
             companyId,
+            createdBy,
             batches,
         });
 
@@ -111,6 +113,7 @@ export const updateProduct = async (req, res) => {
             brandName,
             modelNumber,
             price,
+            createdBy,
             batches
         } = req.body;
 
@@ -124,7 +127,7 @@ export const updateProduct = async (req, res) => {
                 modelNumber,
                 price,
                 batches,
-                updatedBy: req.user._id
+                updatedBy: createdBy
             },
             { new: true, runValidators: true }
         );

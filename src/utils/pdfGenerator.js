@@ -10,7 +10,10 @@ const generatePDF = async (templateName, data, outputPath) => {
         const templateContent = await fs.readFile(templatePath, 'utf-8');
         const compiledTemplate = handlebars.compile(templateContent);
         const html = compiledTemplate(data);
-        const browser = await puppeteer.launch();
+        const browser = await puppeteer.launch({
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+
         const page = await browser.newPage();
         await page.setContent(html);
 
@@ -23,8 +26,9 @@ const generatePDF = async (templateName, data, outputPath) => {
         });
 
         await browser.close();
-        // Remove 'src' from the path
-        const publicPath = outputPath.replace(/^src[\\/]/, ''); // Remove 'src/' or 'src\\'
+
+        const publicPath = path.basename(outputPath);
+
 
         logger.info(`PDF is generated at : ${outputPath}`)
         return publicPath;
