@@ -65,30 +65,27 @@ export const createPOSTransaction = async (req, res) => {
         );
         // Update Inventory
         for (const product of products) {
-            const { productId, quantity } = product;
+            const { productId, quantity, batchId } = product;
 
-            // Fetch the inventory for the product
+            // Fetch the inventory for the specific product and batch
             const inventory = await Inventory.findOne({ companyId, productId }).session(session);
             if (!inventory) {
                 throw new Error(`Inventory not found for productId: ${productId}`);
             }
 
-            // Apply FIFO logic to reduce quantities from batches
-            const batches = inventory.batches || [];
-            let remainingQuantity = quantity;
-
-            for (const batch of batches) {
-                if (remainingQuantity <= 0) break;
-                if (batch.quantity > 0) {
-                    const deduction = Math.min(batch.quantity, remainingQuantity);
-                    batch.quantity -= deduction;
-                    remainingQuantity -= deduction;
-                }
+            // Find the specific batch to update
+            const batchToUpdate = inventory.batches.find(batch => batch._id.toString() === batchId);
+            if (!batchToUpdate) {
+                throw new Error(`Batch not found for batchId: ${batchId} in productId: ${productId}`);
             }
 
-            if (remainingQuantity > 0) {
-                throw new Error(`Insufficient stock for productId: ${productId}`);
+            // Check if sufficient quantity exists
+            if (batchToUpdate.quantity < quantity) {
+                throw new Error(`Insufficient stock in batchId: ${batchId} for productId: ${productId}`);
             }
+
+            // Deduct quantity from the selected batch
+            batchToUpdate.quantity -= quantity;
 
             // Update total quantity in inventory
             inventory.totalQuantity -= quantity;

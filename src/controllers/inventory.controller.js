@@ -250,7 +250,7 @@ export const getAvailableInventory = async (req, res) => {
         }
 
         // Extract query parameters
-        const {companyId, includeBatches} = req.query;
+        const { companyId, includeBatches } = req.query;
 
         if (!companyId) {
             logger.error('Missing required query parameters: companyId.');
@@ -269,48 +269,53 @@ export const getAvailableInventory = async (req, res) => {
             productId: 1,
             companyId: 1,
             barcode: 1,
-            ...(includeBatches === 'true' && {batches: 1}),
+            ...(includeBatches === 'true' && { batches: 1 }),
         }).lean();
 
         if (!inventories || inventories.length === 0) {
             logger.warn(`No inventory found for Company: ${companyId}`);
-            return softErrorResponse(res,[], 'No inventory found');
+            return softErrorResponse(res, [], 'No inventory found');
         }
+
         // Fetch product titles
         const productIds = inventories.map(inv => inv.productId);
-        const products = await Products.find({_id: {$in: productIds}}, {_id: 1, productName: 1}).lean();
+        const products = await Products.find({ _id: { $in: productIds } }, { _id: 1, productName: 1 }).lean();
         const productMap = products.reduce((map, product) => {
             map[product._id] = product.productName;
             return map;
         }, {});
-        // Process inventories with FIFO logic
-        const fifoInventories = inventories.map(inventory => {
-            const fifoBatches = inventory.batches?.filter(batch => batch.quantity > 0) || [];
-            fifoBatches.sort((a, b) => new Date(a.dateAdded) - new Date(b.dateAdded)); // FIFO sorting
 
-            const firstBatch = fifoBatches.length > 0 ? fifoBatches[0] : null;
+        // Process inventories with alphabetically sorted batches
+        const processedInventories = inventories.map(inventory => {
+            let sortedBatches = inventory.batches?.filter(batch => batch.quantity > 0) || [];
+
+            // Sort batches alphabetically by batchId
+            sortedBatches.sort((a, b) => (productMap[inventory.productId] || 'Unknown Product').
+            localeCompare(productMap[inventory.productId] || 'Unknown Product'));
+
 
             return {
                 productId: inventory.productId,
                 name: productMap[inventory.productId] || 'Unknown Product',
                 companyId: inventory.companyId,
                 totalQuantity: inventory.totalQuantity,
-                firstAvailableBatch: firstBatch ? {
-                    batchId: firstBatch._id,
-                    quantity: firstBatch.quantity,
-                    barcode: firstBatch.barcode,
-                    purchasePrice: firstBatch.purchasePrice,
-                    sellingPrice: firstBatch.sellingPrice,
-                    dateAdded: firstBatch.dateAdded,
-                } : null,
+                batches: sortedBatches.map(batch => ({
+                    batchId: batch._id,
+                    quantity: batch.quantity,
+                    barcode: batch.barcode,
+                    purchasePrice: batch.purchasePrice,
+                    sellingPrice: batch.sellingPrice,
+                    dateAdded: batch.dateAdded,
+                }))
             };
         });
 
         // Respond with inventory data
         logger.info(`Inventory fetched successfully for Company: ${companyId}`);
-        return successResponse(res, fifoInventories, 'Available inventory retrieved successfully');
+        return successResponse(res, processedInventories, 'Available inventory retrieved successfully');
     } catch (error) {
         logger.error('Error fetching available inventory:', error);
         return errorResponse(res, error.message);
     }
 };
+
