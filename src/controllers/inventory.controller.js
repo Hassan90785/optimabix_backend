@@ -189,21 +189,39 @@ export const getInventoryById = async (req, res) => {
  */
 export const updateInventory = async (req, res) => {
     try {
-        const {batches,createdBy,productId,vendorId} = req.body;
+        const { batches, updatedBy, productId, vendorId } = req.body;
 
+        // Fetch existing inventory record
         const inventory = await Inventory.findById(req.params.id);
+
         if (!inventory) {
             return errorResponse(res, 'Inventory not found.', 404);
         }
 
-        // Update batch data and total quantity
-        inventory.batches = batches;
-        inventory.totalQuantity = batches.quantity;
-        inventory.updatedBy = createdBy;
-        inventory.productId = productId;
-        inventory.vendorId = vendorId;
+        // Update only if `batches` is provided and is an array
+        if (Array.isArray(batches) && batches.length > 0) {
+            // Ensure each batch has required fields and sanitize null/undefined values
+            inventory.batches = batches.map(batch => ({
+                quantity: batch.quantity || 0,
+                purchasePrice: batch.purchasePrice || 0,
+                totalCost: (batch.quantity || 0) * (batch.purchasePrice || 0), // Ensure accurate totalCost
+                barcode: batch.barcode || '',
+                mgf_dt: batch.mgf_dt ? new Date(batch.mgf_dt) : null,
+                expiry_dt: batch.expiry_dt ? new Date(batch.expiry_dt) : null,
+                sellingPrice: batch.sellingPrice || 0
+            }));
+
+            // Calculate total quantity across all batches
+            inventory.totalQuantity = inventory.batches.reduce((sum, batch) => sum + (batch.quantity || 0), 0);
+        }
+
+        // Update product and vendor references only if provided
+        if (productId) inventory.productId = productId;
+        if (vendorId) inventory.vendorId = vendorId;
+        if (updatedBy) inventory.updatedBy = updatedBy;
 
         await inventory.save();
+
         logger.info(`Inventory updated for Product ID: ${inventory.productId}`);
         return successResponse(res, inventory, 'Inventory updated successfully');
     } catch (error) {
