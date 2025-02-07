@@ -1,6 +1,7 @@
 import {Products} from '../models/index.js';
 import {errorResponse, logger, successResponse} from '../utils/index.js';
 import CompanyMetadata from "../models/companyMetadata.model.js";
+import {formatName} from "../utils/formatName.js";
 
 /**
  * @desc Create a new product with batch management and auditing
@@ -39,10 +40,12 @@ export const createProduct = async (req, res) => {
             });
         } else {
             if (category && !companyData.categories.includes(category)) {
-                companyData.categories.push(category);
+                const name = formatName(category)
+                companyData.categories.push(name);
             }
             if (brandName && !companyData.brands.includes(brandName)) {
-                companyData.brands.push(brandName);
+                const name = formatName(brandName)
+                companyData.brands.push(name);
             }
         }
         await companyData.save();
@@ -82,13 +85,13 @@ export const createProduct = async (req, res) => {
 export const getCompanyMetadata = async (req, res) => {
     try {
 
-        const { companyId } = req.query; // Use req.query instead of req.params
+        const {companyId} = req.query; // Use req.query instead of req.params
 
         if (!companyId) {
             return errorResponse(res, "Company ID is required", 400);
         }
 
-        const metadata = await CompanyMetadata.findOne({ companyId });
+        const metadata = await CompanyMetadata.findOne({companyId});
 
         if (!metadata) {
             return successResponse(res, {
