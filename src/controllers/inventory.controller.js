@@ -182,53 +182,81 @@ export const getInventoryById = async (req, res) => {
         return errorResponse(res, error.message);
     }
 };
-
 /**
  * @desc Update an inventory entry with batch adjustments
  * @route PUT /api/v1/inventory/:id
  */
 export const updateInventory = async (req, res) => {
     try {
-        const { batches, updatedBy, productId, vendorId } = req.body;
+        const { batches, createdBy, productId, vendorId } = req.body;
 
         // Fetch existing inventory record
-        const inventory = await Inventory.findById(req.params.id);
+        const inventory = await Inventory.findById(req.params.id).lean(); // Fetch without hydration for better performance
 
         if (!inventory) {
             return errorResponse(res, 'Inventory not found.', 404);
         }
 
-        // Update only if `batches` is provided and is an array
-        if (Array.isArray(batches) && batches.length > 0) {
-            // Ensure each batch has required fields and sanitize null/undefined values
-            inventory.batches = batches.map(batch => ({
-                quantity: batch.quantity || 0,
-                purchasePrice: batch.purchasePrice || 0,
-                totalCost: (batch.quantity || 0) * (batch.purchasePrice || 0), // Ensure accurate totalCost
-                barcode: batch.barcode || '',
-                mgf_dt: batch.mgf_dt ? new Date(batch.mgf_dt) : null,
-                expiry_dt: batch.expiry_dt ? new Date(batch.expiry_dt) : null,
-                sellingPrice: batch.sellingPrice || 0
-            }));
+        let updateFields = { updatedBy:createdBy };
 
-            // Calculate total quantity across all batches
-            inventory.totalQuantity = inventory.batches.reduce((sum, batch) => sum + (batch.quantity || 0), 0);
+        // 🔥 **Batch Change Detection**
+        if (Array.isArray(batches) && batches.length > 0) {
+            const prevBatchesMap = new Map(inventory.batches.map(batch => [batch.barcode, batch]));
+
+            let modifiedBatches = [];
+            let newBatches = [];
+
+            batches.forEach(batch => {
+                const prevBatch = prevBatchesMap.get(batch.barcode);
+
+                if (prevBatch) {
+                    // **Check if batch fields changed**
+                    let isModified = (
+                        prevBatch.purchasePrice !== batch.purchasePrice ||
+                        prevBatch.expiry_dt?.toISOString() !== new Date(batch.expiry_dt)?.toISOString() ||
+                        prevBatch.mgf_dt?.toISOString() !== new Date(batch.mgf_dt)?.toISOString()
+                    );
+
+                    if (isModified) {
+                        modifiedBatches.push(batch);
+                    }
+                } else {
+                    // **New batch detected**
+                    newBatches.push(batch);
+                }
+            });
+
+            // **If new batches exist, add them**
+            if (newBatches.length > 0) {
+                updateFields.batches = [...inventory.batches, ...newBatches]; // Append new batches
+            }
+
+            if (modifiedBatches.length > 0) {
+                updateFields.batches = updateFields.batches || batches; // Ensure modified batches are included
+            }
         }
 
-        // Update product and vendor references only if provided
-        if (productId) inventory.productId = productId;
-        if (vendorId) inventory.vendorId = vendorId;
-        if (updatedBy) inventory.updatedBy = updatedBy;
+        // ✅ **Update Product & Vendor If Provided**
+        if (productId) updateFields.productId = productId;
+        if (vendorId) updateFields.vendorId = vendorId;
+        // ✅ **Update totalQuantity based on batch changes**
+        updateFields.totalQuantity = updateFields.batches?.reduce((sum, batch) => sum + batch.quantity, 0) || inventory.totalQuantity;
 
-        await inventory.save();
+        // ✅ **Perform Update Using `findOneAndUpdate` to Trigger Hooks**
+        const updatedInventory = await Inventory.findOneAndUpdate(
+            { _id: req.params.id },
+            { $set: updateFields },
+            { new: true, runValidators: true }
+        );
 
-        logger.info(`Inventory updated for Product ID: ${inventory.productId}`);
-        return successResponse(res, inventory, 'Inventory updated successfully');
+        logger.info(`Inventory updated for Product ID: ${updatedInventory.productId}`);
+        return successResponse(res, updatedInventory, 'Inventory updated successfully');
     } catch (error) {
         logger.error('Error updating inventory:', error);
         return errorResponse(res, error.message);
     }
 };
+
 
 /**
  * @desc Soft delete an inventory record

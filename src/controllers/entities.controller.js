@@ -1,5 +1,5 @@
-import { Entities } from '../models/index.js';
-import { successResponse, errorResponse, logger } from '../utils/index.js';
+import {AuditLog, Entities} from '../models/index.js';
+import {errorResponse, logger, successResponse} from '../utils/index.js';
 
 /**
  * @desc Create a new entity (Customer, Vendor, or Both)
@@ -19,7 +19,7 @@ export const createEntity = async (req, res) => {
         } = req.body;
 
         // Prevent duplicate entity creation
-        const existingEntity = await Entities.findOne({ entityName });
+        const existingEntity = await Entities.findOne({entityName});
         if (existingEntity) {
             return errorResponse(res, 'Entity with this name already exists.', 400);
         }
@@ -34,7 +34,14 @@ export const createEntity = async (req, res) => {
             companyId,
             createdBy
         });
-
+        await AuditLog.logAuditEvent({
+            companyId,
+            createdBy,
+            actionType: "Create",
+            entityType: "Entity",
+            entityId: newEntity._id,
+            description: `New Entity : ${entityName} - ${entityType}, by ${createdBy}.`
+        });
         logger.info(`Entity created: ${newEntity.entityName}`);
         return successResponse(res, newEntity, 'Entity created successfully');
     } catch (error) {
@@ -51,8 +58,8 @@ export const createEntity = async (req, res) => {
 export const getAllEntities = async (req, res) => {
     try {
         logger.info('Fetching entities...');
-        const { entityType, page = 1, limit = 10, companyId } = req.query;
-        const filter = entityType ? { entityType, companyId } : {companyId};
+        const {entityType, page = 1, limit = 10, companyId} = req.query;
+        const filter = entityType ? {entityType, companyId} : {companyId};
 
         const entities = await Entities.find(filter)
             .skip((page - 1) * limit)
@@ -95,7 +102,16 @@ export const getEntityById = async (req, res) => {
  */
 export const updateEntity = async (req, res) => {
     try {
-        const { entityType, entityName, contactPerson, billingAddress, shippingAddress, taxInformation, createdBy } = req.body;
+        const {
+            entityType,
+            entityName,
+            contactPerson,
+            billingAddress,
+            shippingAddress,
+            taxInformation,
+            companyId,
+            createdBy
+        } = req.body;
 
         const updatedEntity = await Entities.findByIdAndUpdate(
             req.params.id,
@@ -108,13 +124,12 @@ export const updateEntity = async (req, res) => {
                 taxInformation,
                 updatedBy: createdBy
             },
-            { new: true, runValidators: true }
+            {new: true, runValidators: true}
         );
 
         if (!updatedEntity) {
             return errorResponse(res, 'Entity not found.', 404);
         }
-
         logger.info(`Entity updated: ${updatedEntity.entityName}`);
         return successResponse(res, updatedEntity, 'Entity updated successfully');
     } catch (error) {
@@ -151,8 +166,8 @@ export const restoreEntity = async (req, res) => {
     try {
         const restoredEntity = await Entities.findByIdAndUpdate(
             req.params.id,
-            { isDeleted: false, updatedBy: req.user._id },
-            { new: true }
+            {isDeleted: false, updatedBy: req.user._id},
+            {new: true}
         );
 
         if (!restoredEntity) {

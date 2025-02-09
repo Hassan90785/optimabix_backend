@@ -63,36 +63,46 @@ export const createPOSTransaction = async (req, res) => {
             ],
             {session}
         );
-        // Update Inventory
+        // Updating inventory
         for (const product of products) {
             const { productId, quantity, batchId } = product;
 
-            // Fetch the inventory for the specific product and batch
-            const inventory = await Inventory.findOne({ companyId, productId }).session(session);
+            // Step 1: Fetch the batch to validate stock availability
+            const inventory = await Inventory.findOne(
+                { companyId, productId, "batches._id": batchId },
+                { "batches.$": 1, totalQuantity: 1 }
+            ).session(session);
+
             if (!inventory) {
                 throw new Error(`Inventory not found for productId: ${productId}`);
             }
 
-            // Find the specific batch to update
-            const batchToUpdate = inventory.batches.find(batch => batch._id.toString() === batchId);
+            const batchToUpdate = inventory.batches[0]; // Since we used `$`, we get only the matched batch
+
             if (!batchToUpdate) {
                 throw new Error(`Batch not found for batchId: ${batchId} in productId: ${productId}`);
             }
 
-            // Check if sufficient quantity exists
+            // Step 2: Validate available stock
             if (batchToUpdate.quantity < quantity) {
                 throw new Error(`Insufficient stock in batchId: ${batchId} for productId: ${productId}`);
             }
 
-            // Deduct quantity from the selected batch
-            batchToUpdate.quantity -= quantity;
+            // Step 3: Deduct stock from batch
+            await Inventory.updateOne(
+                { companyId, productId, "batches._id": batchId },
+                { $inc: { "batches.$.quantity": -quantity } }, // Decrement batch quantity
+                { session }
+            );
 
-            // Update total quantity in inventory
-            inventory.totalQuantity -= quantity;
-
-            // Save updated inventory
-            await inventory.save({ session });
+            // Step 4: Update totalQuantity separately
+            await Inventory.updateOne(
+                { companyId, productId },
+                { $inc: { totalQuantity: -quantity } }, // Decrement total quantity
+                { session }
+            );
         }
+
 
         logger.info(`Inventory updated for transaction ${newTransaction.transactionNumber}`);
 
