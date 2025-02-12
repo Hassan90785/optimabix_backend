@@ -182,35 +182,81 @@ export const getInventoryById = async (req, res) => {
         return errorResponse(res, error.message);
     }
 };
-
 /**
  * @desc Update an inventory entry with batch adjustments
  * @route PUT /api/v1/inventory/:id
  */
 export const updateInventory = async (req, res) => {
     try {
-        const {batches,createdBy,productId,vendorId} = req.body;
+        const { batches, createdBy, productId, vendorId } = req.body;
 
-        const inventory = await Inventory.findById(req.params.id);
+        // Fetch existing inventory record
+        const inventory = await Inventory.findById(req.params.id).lean(); // Fetch without hydration for better performance
+
         if (!inventory) {
             return errorResponse(res, 'Inventory not found.', 404);
         }
 
-        // Update batch data and total quantity
-        inventory.batches = batches;
-        inventory.totalQuantity = batches.quantity;
-        inventory.updatedBy = createdBy;
-        inventory.productId = productId;
-        inventory.vendorId = vendorId;
+        let updateFields = { updatedBy:createdBy };
 
-        await inventory.save();
-        logger.info(`Inventory updated for Product ID: ${inventory.productId}`);
-        return successResponse(res, inventory, 'Inventory updated successfully');
+        // 🔥 **Batch Change Detection**
+        if (Array.isArray(batches) && batches.length > 0) {
+            const prevBatchesMap = new Map(inventory.batches.map(batch => [batch.barcode, batch]));
+
+            let modifiedBatches = [];
+            let newBatches = [];
+
+            batches.forEach(batch => {
+                const prevBatch = prevBatchesMap.get(batch.barcode);
+
+                if (prevBatch) {
+                    // **Check if batch fields changed**
+                    let isModified = (
+                        prevBatch.purchasePrice !== batch.purchasePrice ||
+                        prevBatch.expiry_dt?.toISOString() !== new Date(batch.expiry_dt)?.toISOString() ||
+                        prevBatch.mgf_dt?.toISOString() !== new Date(batch.mgf_dt)?.toISOString()
+                    );
+
+                    if (isModified) {
+                        modifiedBatches.push(batch);
+                    }
+                } else {
+                    // **New batch detected**
+                    newBatches.push(batch);
+                }
+            });
+
+            // **If new batches exist, add them**
+            if (newBatches.length > 0) {
+                updateFields.batches = [...inventory.batches, ...newBatches]; // Append new batches
+            }
+
+            if (modifiedBatches.length > 0) {
+                updateFields.batches = updateFields.batches || batches; // Ensure modified batches are included
+            }
+        }
+
+        // ✅ **Update Product & Vendor If Provided**
+        if (productId) updateFields.productId = productId;
+        if (vendorId) updateFields.vendorId = vendorId;
+        // ✅ **Update totalQuantity based on batch changes**
+        updateFields.totalQuantity = updateFields.batches?.reduce((sum, batch) => sum + batch.quantity, 0) || inventory.totalQuantity;
+
+        // ✅ **Perform Update Using `findOneAndUpdate` to Trigger Hooks**
+        const updatedInventory = await Inventory.findOneAndUpdate(
+            { _id: req.params.id },
+            { $set: updateFields },
+            { new: true, runValidators: true }
+        );
+
+        logger.info(`Inventory updated for Product ID: ${updatedInventory.productId}`);
+        return successResponse(res, updatedInventory, 'Inventory updated successfully');
     } catch (error) {
         logger.error('Error updating inventory:', error);
         return errorResponse(res, error.message);
     }
 };
+
 
 /**
  * @desc Soft delete an inventory record
@@ -250,7 +296,7 @@ export const getAvailableInventory = async (req, res) => {
         }
 
         // Extract query parameters
-        const {companyId, includeBatches} = req.query;
+        const { companyId, includeBatches } = req.query;
 
         if (!companyId) {
             logger.error('Missing required query parameters: companyId.');
@@ -269,48 +315,53 @@ export const getAvailableInventory = async (req, res) => {
             productId: 1,
             companyId: 1,
             barcode: 1,
-            ...(includeBatches === 'true' && {batches: 1}),
+            ...(includeBatches === 'true' && { batches: 1 }),
         }).lean();
 
         if (!inventories || inventories.length === 0) {
             logger.warn(`No inventory found for Company: ${companyId}`);
-            return softErrorResponse(res,[], 'No inventory found');
+            return softErrorResponse(res, [], 'No inventory found');
         }
+
         // Fetch product titles
         const productIds = inventories.map(inv => inv.productId);
-        const products = await Products.find({_id: {$in: productIds}}, {_id: 1, productName: 1}).lean();
+        const products = await Products.find({ _id: { $in: productIds } }, { _id: 1, productName: 1 }).lean();
         const productMap = products.reduce((map, product) => {
             map[product._id] = product.productName;
             return map;
         }, {});
-        // Process inventories with FIFO logic
-        const fifoInventories = inventories.map(inventory => {
-            const fifoBatches = inventory.batches?.filter(batch => batch.quantity > 0) || [];
-            fifoBatches.sort((a, b) => new Date(a.dateAdded) - new Date(b.dateAdded)); // FIFO sorting
 
-            const firstBatch = fifoBatches.length > 0 ? fifoBatches[0] : null;
+        // Process inventories with alphabetically sorted batches
+        const processedInventories = inventories.map(inventory => {
+            let sortedBatches = inventory.batches?.filter(batch => batch.quantity > 0) || [];
+
+            // Sort batches alphabetically by batchId
+            sortedBatches.sort((a, b) => (productMap[inventory.productId] || 'Unknown Product').
+            localeCompare(productMap[inventory.productId] || 'Unknown Product'));
+
 
             return {
                 productId: inventory.productId,
                 name: productMap[inventory.productId] || 'Unknown Product',
                 companyId: inventory.companyId,
                 totalQuantity: inventory.totalQuantity,
-                firstAvailableBatch: firstBatch ? {
-                    batchId: firstBatch._id,
-                    quantity: firstBatch.quantity,
-                    barcode: firstBatch.barcode,
-                    purchasePrice: firstBatch.purchasePrice,
-                    sellingPrice: firstBatch.sellingPrice,
-                    dateAdded: firstBatch.dateAdded,
-                } : null,
+                batches: sortedBatches.map(batch => ({
+                    batchId: batch._id,
+                    quantity: batch.quantity,
+                    barcode: batch.barcode,
+                    purchasePrice: batch.purchasePrice,
+                    sellingPrice: batch.sellingPrice,
+                    dateAdded: batch.dateAdded,
+                }))
             };
         });
 
         // Respond with inventory data
         logger.info(`Inventory fetched successfully for Company: ${companyId}`);
-        return successResponse(res, fifoInventories, 'Available inventory retrieved successfully');
+        return successResponse(res, processedInventories, 'Available inventory retrieved successfully');
     } catch (error) {
         logger.error('Error fetching available inventory:', error);
         return errorResponse(res, error.message);
     }
 };
+

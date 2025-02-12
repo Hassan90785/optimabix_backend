@@ -3,25 +3,25 @@ import mongoose from "mongoose";
 const auditLogSchema = new mongoose.Schema({
     companyId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Companies',
-        required: true
+        ref: "Companies"
     },
     userId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Users',
-        required: true
+        ref: "Users"
     },
     actionType: {
         type: String,
-        enum: ['Create', 'Update', 'Delete', 'Soft Delete', 'Login', 'Logout'],
-        required: true
+        enum: ["Create", "Update", "Delete", "Soft Delete", "Login", "Logout"]
     },
     entityType: {
-        type: String,
-        required: true
+        type: String
     },
     entityId: {
-        type: mongoose.Schema.Types.ObjectId
+        type: mongoose.Schema.Types.ObjectId,
+        default: null
+    },
+    data: {
+        type: mongoose.Schema.Types.Mixed
     },
     description: {
         type: String,
@@ -31,42 +31,45 @@ const auditLogSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     },
-    // Soft Deletion and Auditing Fields
-    isDeleted: {
-        type: Boolean,
-        default: false
-    },
-    createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Users'
-    },
-    updatedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Users'
-    },
-    deletedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Users'
+}, {timestamps: true});
+
+// ✅ **Reusable Function to Log Audit Events**
+auditLogSchema.statics.logAuditEvent = async function ({
+                                                           companyId,
+                                                           userId,
+                                                           actionType,
+                                                           entityType,
+                                                           data = null,
+                                                           entityId = null,
+                                                           description = ""
+                                                       }) {
+    try {
+        // Ensure description is formatted properly
+        description = description.trim();
+
+        // Create and save the audit log entry
+        const auditEntry = new this({
+            companyId,
+            userId,
+            actionType,
+            entityType,
+            data,
+            entityId,
+            description
+        });
+
+        await auditEntry.save();
+        return auditEntry;
+    } catch (error) {
+        console.error("Error logging audit event:", error);
     }
-}, { timestamps: true });
-
-// Indexes for optimized lookups
-auditLogSchema.index({ companyId: 1, userId: 1 });
-auditLogSchema.index({ actionType: 1 });
-auditLogSchema.index({ isDeleted: 1 });
-
-// Pre-query middleware to exclude soft-deleted records
-auditLogSchema.pre(/^find/, function(next) {
-    this.where({ isDeleted: false });
-    next();
-});
-
-// Method for soft deletion
-auditLogSchema.methods.softDelete = async function (deletedBy) {
-    this.isDeleted = true;
-    this.deletedBy = deletedBy;
-    await this.save();
 };
 
-const AuditLog = mongoose.model('AuditLog', auditLogSchema);
+// ✅ Indexes for optimized lookups
+auditLogSchema.index({companyId: 1, userId: 1});
+auditLogSchema.index({actionType: 1});
+auditLogSchema.index({entityType: 1});
+auditLogSchema.index({actionDate: -1});
+
+const AuditLog = mongoose.model("AuditLog", auditLogSchema);
 export default AuditLog;

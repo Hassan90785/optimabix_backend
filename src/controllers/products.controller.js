@@ -1,5 +1,7 @@
-import { Products, Entities } from '../models/index.js';
-import { successResponse, errorResponse, logger } from '../utils/index.js';
+import {Products} from '../models/index.js';
+import {errorResponse, logger, successResponse} from '../utils/index.js';
+import CompanyMetadata from "../models/companyMetadata.model.js";
+import {formatName} from "../utils/formatName.js";
 
 /**
  * @desc Create a new product with batch management and auditing
@@ -21,14 +23,34 @@ export const createProduct = async (req, res) => {
             batches
         } = req.body;
 
-
         // Prevent duplicate SKU within the same company
-        let existingProduct = await Products.findOne({ sku });
+        let existingProduct = await Products.findOne({sku, companyId});
         if (existingProduct) {
-            return errorResponse(res, 'Product with this SKU already exists.', 400);
+            return errorResponse(res, "Product with this SKU already exists.", 400);
         }
 
-        // Auto-generate SKU if not provided
+        // Ensure metadata persistence (categories, brands)
+        let companyData = await CompanyMetadata.findOne({companyId});
+
+        if (!companyData) {
+            companyData = new CompanyMetadata({
+                companyId,
+                categories: category ? [category] : [],
+                brands: brandName ? [brandName] : []
+            });
+        } else {
+            if (category && !companyData.categories.includes(category)) {
+                const name = formatName(category)
+                companyData.categories.push(name);
+            }
+            if (brandName && !companyData.brands.includes(brandName)) {
+                const name = formatName(brandName)
+                companyData.brands.push(name);
+            }
+        }
+        await companyData.save();
+
+        // Create the product
         const product = new Products({
             productName,
             sku: sku || undefined,
@@ -40,19 +62,51 @@ export const createProduct = async (req, res) => {
             vendorId,
             companyId,
             createdBy,
-            batches,
+            batches
         });
 
         if (!sku) product.generateSKU();
 
         await product.save();
         logger.info(`Product created: ${product.productName}`);
-        return successResponse(res, product, 'Product created successfully');
+        return successResponse(res, product, "Product created successfully");
     } catch (error) {
-        logger.error('Error creating product:', error);
+        logger.error("Error creating product:", error);
         return errorResponse(res, error.message);
     }
 };
+/**
+ *  Get Company Meta data
+ * @param req
+ * @param res
+ * @returns {Promise<*>}
+ */
+
+export const getCompanyMetadata = async (req, res) => {
+    try {
+
+        const {companyId} = req.query; // Use req.query instead of req.params
+
+        if (!companyId) {
+            return errorResponse(res, "Company ID is required", 400);
+        }
+
+        const metadata = await CompanyMetadata.findOne({companyId});
+
+        if (!metadata) {
+            return successResponse(res, {
+                categories: [],
+                brands: []
+            }, "No metadata found");
+        }
+
+        return successResponse(res, metadata, "Metadata fetched successfully");
+    } catch (error) {
+        logger.error("Error fetching metadata:", error);
+        return errorResponse(res, error.message);
+    }
+};
+
 
 /**
  * @desc Get all products with filtering, pagination, and batch details
@@ -61,8 +115,8 @@ export const createProduct = async (req, res) => {
  */
 export const getAllProducts = async (req, res) => {
     try {
-        const { category, companyId, page = 1, limit = 10 } = req.query;
-        const filter = { isDeleted: false, companyId };
+        const {category, companyId, page = 1, limit = 10} = req.query;
+        const filter = {isDeleted: false, companyId};
 
         if (category) filter.category = category;
 
@@ -129,7 +183,7 @@ export const updateProduct = async (req, res) => {
                 batches,
                 updatedBy: createdBy
             },
-            { new: true, runValidators: true }
+            {new: true, runValidators: true}
         );
 
         if (!updatedProduct) {
@@ -172,8 +226,8 @@ export const restoreProduct = async (req, res) => {
     try {
         const restoredProduct = await Products.findByIdAndUpdate(
             req.params.id,
-            { isDeleted: false, updatedBy: req.user._id },
-            { new: true }
+            {isDeleted: false, updatedBy: req.user._id},
+            {new: true}
         );
 
         if (!restoredProduct) {

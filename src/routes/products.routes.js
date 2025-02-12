@@ -2,10 +2,11 @@ import express from 'express';
 import {
     createProduct,
     getAllProducts,
+    getCompanyMetadata,
     getProductById,
-    updateProduct,
+    restoreProduct,
     softDeleteProduct,
-    restoreProduct
+    updateProduct
 } from '../controllers/products.controller.js';
 
 import authMiddleware from '../middlewares/auth.middleware.js';
@@ -26,6 +27,13 @@ router.post('/', authMiddleware, validationMiddleware, createProduct);
  * @access Private
  */
 router.get('/', authMiddleware, getAllProducts);
+
+/**
+ * @route GET /api/v1/products/:id
+ * @desc Get a single product by ID
+ * @access Private
+ */
+router.get('/meta', authMiddleware, getCompanyMetadata);
 
 /**
  * @route GET /api/v1/products/:id
