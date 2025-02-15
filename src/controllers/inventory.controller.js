@@ -118,7 +118,7 @@ export const printBarCodes = async (req, res) => {
             productName,
             barcode,
             sellingPrice,
-            barcodes: Array.from({ length: quantity }, () => ({
+            barcodes: Array.from({ length: 1 }, () => ({
                 mgf_dt: formattedMgfDate,
                 expiry_dt: formattedExpiryDate
             }))
