@@ -28,12 +28,12 @@ connectDB();
 app.use(express.json());
 
 // ✅ Register API Routes with Versioning
-app.use('/api/v1', routes);
+app.use('/staging/api/v1', routes);
 
 // ✅ Global Error Handling Middleware
 app.use(errorMiddleware);
 // Hello World endpoint
-app.get('/api/v1/hello', (req, res) => {
+app.get('/staging/v1/hello', (req, res) => {
     res.send('Hello, World!');
 });
 
