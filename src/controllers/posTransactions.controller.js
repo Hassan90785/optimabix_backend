@@ -298,7 +298,7 @@ export const createPOSTransaction = async (req, res) => {
  */
 export const getAllPOSTransactions = async (req, res) => {
     try {
-        const { companyId, startDate, endDate, page = 1, limit = 10 } = req.query;
+        const { companyId, startDate, endDate, page = 1, limit = 10000 } = req.query;
 
         const filter = { companyId, isDeleted: false };
 
