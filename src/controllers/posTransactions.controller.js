@@ -1,6 +1,7 @@
-import {Companies, Inventory, Invoices, Ledger, Payments, POSTransaction} from '../models/index.js';
+import {Companies, Inventory, Invoices, Payments, POSTransaction} from '../models/index.js';
 import {errorResponse, generatePDF, logger, successResponse} from '../utils/index.js';
 import mongoose from "mongoose";
+import {createDoubleLedgerEntry} from "../utils/ledgerService.js";
 
 export const createPOSTransaction = async (req, res) => {
     const session = await mongoose.startSession();
@@ -25,53 +26,42 @@ export const createPOSTransaction = async (req, res) => {
         // Generate a unique transaction number if necessary (you can use an auto-increment or UUID logic here)
 
         // Create a new POS transaction
-        const [newTransaction] = await POSTransaction.create(
-            [
-                {
-                    companyId,
-                    products,
-                    subTotal,
-                    discountAmount,
-                    taxAmount,
-                    totalPayable,
-                    paymentMethod,
-                    paidAmount,
-                    changeGiven,
-                    createdBy
-                }
-            ],
-            {session}
-        );
+        const [newTransaction] = await POSTransaction.create([{
+            companyId,
+            products,
+            subTotal,
+            discountAmount,
+            taxAmount,
+            totalPayable,
+            paymentMethod,
+            paidAmount,
+            changeGiven,
+            createdBy
+        }], {session});
         logger.info(`POS Transaction created: ${newTransaction.transactionNumber}`);
-
         /**
          * Payment Handling
          */
-        // Create a new payment record
-        const [payment] = await Payments.create(
-            [
-                {
-                    companyId,
-                    transactionId: newTransaction._id,
-                    ledgerEntryId: null, // Placeholder; update with actual ledger entry logic if needed
-                    paymentMethod,
-                    amountPaid: paidAmount,
-                    paymentStatus: paidAmount >= totalPayable ? 'Completed' : 'Pending',
-                    createdBy,
-                    paidBy: null // Placeholder; update with actual payer logic if needed
-                }
-            ],
-            {session}
-        );
+            // Create a new payment record
+        const [payment] = await Payments.create([{
+                companyId,
+                transactionId: newTransaction._id,
+                ledgerEntryId: null, // Placeholder; update with actual ledger entry logic if needed
+                paymentMethod,
+                amountPaid: paidAmount,
+                paymentStatus: paidAmount >= totalPayable ? 'Completed' : 'Pending',
+                createdBy,
+                paidBy: null // Placeholder; update with actual payer logic if needed
+            }], {session});
         // Updating inventory
         for (const product of products) {
-            const { productId, quantity, batchId } = product;
+            const {productId, quantity, batchId} = product;
 
             // Step 1: Fetch the batch to validate stock availability
-            const inventory = await Inventory.findOne(
-                { companyId, productId, "batches._id": batchId },
-                { "batches.$": 1, totalQuantity: 1 }
-            ).session(session);
+            const inventory = await Inventory.findOne({companyId, productId, "batches._id": batchId}, {
+                "batches.$": 1,
+                totalQuantity: 1
+            }).session(session);
 
             if (!inventory) {
                 throw new Error(`Inventory not found for productId: ${productId}`);
@@ -89,18 +79,16 @@ export const createPOSTransaction = async (req, res) => {
             }
 
             // Step 3: Deduct stock from batch
-            await Inventory.updateOne(
-                { companyId, productId, "batches._id": batchId },
-                { $inc: { "batches.$.quantity": -quantity } }, // Decrement batch quantity
-                { session }
-            );
+            await Inventory.updateOne({
+                    companyId,
+                    productId,
+                    "batches._id": batchId
+                }, {$inc: {"batches.$.quantity": -quantity}}, // Decrement batch quantity
+                {session});
 
             // Step 4: Update totalQuantity separately
-            await Inventory.updateOne(
-                { companyId, productId },
-                { $inc: { totalQuantity: -quantity } }, // Decrement total quantity
-                { session }
-            );
+            await Inventory.updateOne({companyId, productId}, {$inc: {totalQuantity: -quantity}}, // Decrement total quantity
+                {session});
         }
 
 
@@ -109,102 +97,99 @@ export const createPOSTransaction = async (req, res) => {
         /**
          * Invoice Handling
          */
-        // Create a new invoice record
-        const [invoice] = await Invoices.create(
-            [
-                {
-                    companyId,
-                    transactionId: newTransaction._id,
-                    ledgerEntryId: null, // Placeholder; update with actual ledger entry logic if needed
-                    linkedEntityId: null, // Optional, depending on the customer or vendor
-                    lineItems: products.map(product => ({
-                        productId: product.productId,
-                        batchId: product.batchId || null,
-                        quantity: product.quantity,
-                        unitPrice: product.unitPrice,
-                        totalPrice: product.totalPrice
-                    })),
-                    subTotal,
-                    discountAmount,
-                    taxAmount,
-                    totalAmount: totalPayable,
-                    paymentStatus: paidAmount >= totalPayable ? 'Paid' : 'Partial',
-                    createdBy,
-                    notes: 'Invoice for the transaction'
-                }
-            ],
-            {session}
-        );
+            // Create a new invoice record
+        const [invoice] = await Invoices.create([{
+                companyId,
+                transactionId: newTransaction._id,
+                ledgerEntryId: null, // Placeholder; update with actual ledger entry logic if needed
+                linkedEntityId: null, // Optional, depending on the customer or vendor
+                lineItems: products.map(product => ({
+                    productId: product.productId,
+                    batchId: product.batchId || null,
+                    quantity: product.quantity,
+                    unitPrice: product.unitPrice,
+                    totalPrice: product.totalPrice
+                })),
+                subTotal,
+                discountAmount,
+                taxAmount,
+                totalAmount: totalPayable,
+                paymentStatus: paidAmount >= totalPayable ? 'Paid' : 'Partial',
+                createdBy,
+                notes: 'Invoice for the transaction'
+            }], {session});
         /**
          * Ledger Handling
          * @type {*[]}
          */
-        // Add ledger entries for the transaction
+            // Add ledger entries for the transaction
         const ledgerEntries = [];
+        // 🧠 Determine correct debit account based on sale type
+        const isCreditSale = paidAmount < totalPayable;
+        const saleDebitAccount = isCreditSale ? 'Accounts Receivable' : 'Cash/Bank';
 
-        // Ledger Entry: Sales Revenue
-        ledgerEntries.push(
-            Ledger.manageLedgerEntry({
+
+// 🧾 1. Sale Revenue (net of discount)
+        await createDoubleLedgerEntry({
+            transactionId: newTransaction._id.toString(),
+            companyId,
+            transactionType: 'Sale',
+            referenceType: 'POS Transactions',
+            description: `Sales revenue recorded for transaction ${newTransaction.transactionNumber}`,
+            debitAccount: saleDebitAccount,
+            debitAmount: subTotal,
+            creditAccount: 'Sales Revenue',
+            creditAmount: subTotal,
+            createdBy
+        });
+
+// 🏛️ 2. Tax (if applicable)
+        if (parseFloat(taxAmount) > 0) {
+            await createDoubleLedgerEntry({
+                transactionId: newTransaction._id.toString(),
                 companyId,
-                transactionType: 'Sale',
-                description: `Sales revenue recorded for transaction ${newTransaction.transactionNumber}`,
-                debitCaption: 'Accounts Receivable',
-                creditCaption: 'Sales Revenue',
-                debitAmount: subTotal,
-                creditAmount: subTotal,
+                transactionType: 'Tax',
                 referenceType: 'POS Transactions',
-                createdBy,
-            })
-        );
-
-        // Ledger Entry: Tax Collected
-        if (taxAmount > 0) {
-            ledgerEntries.push(
-                Ledger.manageLedgerEntry({
-                    companyId,
-                    transactionType: 'Tax',
-                    description: `Tax collected for transaction ${newTransaction.transactionNumber}`,
-                    debitCaption: 'Accounts Receivable',
-                    creditCaption: 'Tax Payable',
-                    debitAmount: taxAmount,
-                    creditAmount: taxAmount,
-                    referenceType: 'POS Transactions',
-                    createdBy,
-                })
-            );
+                description: `Tax collected for transaction ${newTransaction.transactionNumber}`,
+                debitAccount: saleDebitAccount,
+                debitAmount: parseFloat(taxAmount),
+                creditAccount: 'Tax Payable',
+                creditAmount: parseFloat(taxAmount),
+                createdBy
+            });
         }
 
-        // Ledger Entry: Discount Given
-        if (discountAmount > 0) {
-            ledgerEntries.push(
-                Ledger.manageLedgerEntry({
-                    companyId,
-                    transactionType: 'Discount',
-                    description: `Discount given for transaction ${newTransaction.transactionNumber}`,
-                    debitCaption: 'Discount Expense',
-                    creditCaption: 'Accounts Receivable',
-                    debitAmount: discountAmount,
-                    creditAmount: discountAmount,
-                    referenceType: 'POS Transactions',
-                    createdBy,
-                })
-            );
+// 🎁 3. Discount (if applicable) — FIXED CREDIT SIDE
+        if (parseFloat(discountAmount) > 0) {
+            await createDoubleLedgerEntry({
+                transactionId: newTransaction._id.toString(),
+                companyId,
+                transactionType: 'Discount',
+                referenceType: 'POS Transactions',
+                description: `Discount given for transaction ${newTransaction.transactionNumber}`,
+                debitAccount: 'Discount Expense',
+                creditAccount: isCreditSale ? 'Accounts Receivable' : 'Sales Revenue',
+                debitAmount: parseFloat(discountAmount),
+                creditAmount: parseFloat(discountAmount),
+                createdBy
+            });
         }
 
-        // Ledger Entry: Payment Received
-        ledgerEntries.push(
-            Ledger.manageLedgerEntry({
+// 💵 4. Payment Received (Only for Credit/Partial Sales)
+        if (paidAmount > 0 && isCreditSale) {
+            await createDoubleLedgerEntry({
+                transactionId: newTransaction._id.toString(),
                 companyId,
                 transactionType: 'Payment',
+                referenceType: 'Payments',
                 description: `Payment received for transaction ${newTransaction.transactionNumber}`,
-                debitCaption: 'Cash/Bank',
-                creditCaption: 'Accounts Receivable',
+                debitAccount: 'Cash/Bank',
+                creditAccount: 'Accounts Receivable',
                 debitAmount: paidAmount,
                 creditAmount: paidAmount,
-                referenceType: 'Payments',
-                createdBy,
-            })
-        );
+                createdBy
+            });
+        }
 
         // Execute all ledger entry promises
         await Promise.all(ledgerEntries);
@@ -213,9 +198,8 @@ export const createPOSTransaction = async (req, res) => {
         await session.commitTransaction();
 
 
-       const tempTransaction= await newTransaction.populate({
-            path: 'products.productId',
-            select: 'productName sku' // whatever fields you want from Product
+        const tempTransaction = await newTransaction.populate({
+            path: 'products.productId', select: 'productName sku' // whatever fields you want from Product
         });
 
         const transactionObj = tempTransaction.toObject();
@@ -235,8 +219,6 @@ export const createPOSTransaction = async (req, res) => {
         });
 
         console.log('Enriched transaction:', transactionObj);
-
-
 
 
         const company = await Companies.findById(companyId)
@@ -271,9 +253,7 @@ export const createPOSTransaction = async (req, res) => {
 
         logger.info(`Transaction, payment, and invoice created successfully: ${newTransaction.transactionNumber} & ${invoice.invoiceNumber}`);
         return successResponse(res, {
-            transaction: newTransaction,
-            payment,
-            receiptPath: pdfPath,
+            transaction: newTransaction, payment, receiptPath: pdfPath,
         }, 'Transaction and payment created successfully');
     } catch (error) {
 
@@ -298,9 +278,9 @@ export const createPOSTransaction = async (req, res) => {
  */
 export const getAllPOSTransactions = async (req, res) => {
     try {
-        const { companyId, startDate, endDate, page = 1, limit = 10000 } = req.query;
+        const {companyId, startDate, endDate, page = 1, limit = 10000} = req.query;
 
-        const filter = { companyId, isDeleted: false };
+        const filter = {companyId, isDeleted: false};
 
         if (startDate || endDate) {
             filter.date = {};
@@ -310,17 +290,14 @@ export const getAllPOSTransactions = async (req, res) => {
         console.log('filter:: ', filter)
         const transactions = await POSTransaction.find(filter)
             .populate('products.productId')
-            .sort({ date: -1 })
+            .sort({date: -1})
             .skip((page - 1) * limit)
             .limit(Number(limit));
         console.log('transactions:: ', transactions)
         const totalRecords = await POSTransaction.countDocuments(filter);
 
         return successResponse(res, {
-            transactions,
-            totalRecords,
-            currentPage: Number(page),
-            totalPages: Math.ceil(totalRecords / limit)
+            transactions, totalRecords, currentPage: Number(page), totalPages: Math.ceil(totalRecords / limit)
         }, 'Transactions fetched successfully');
     } catch (error) {
         logger.error('Error fetching transactions:', error);

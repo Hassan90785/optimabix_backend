@@ -75,17 +75,18 @@ export const createInventory = async (req, res) => {
 
         // Add ledger entry
         if (ledgerDebitAmount > 0) {
-            await Ledger.manageLedgerEntry({
+            await createDoubleLedgerEntry({
                 companyId,
+                transactionId: new mongoose.Types.ObjectId().toString(), // or link to Inventory _id if needed
                 transactionType: 'Purchase',
-                description: ledgerDescription,
-                debitAmount: ledgerDebitAmount,
-                debitCaption: debitCaption,
-                creditCaption: creditCaption,
-                creditAmount: ledgerDebitAmount, // Vendor payable liability
-                linkedEntityId: vendorId,
                 referenceType: 'Inventory',
-                createdBy,
+                description: ledgerDescription,
+                debitAccount: 'Inventory',
+                debitAmount: ledgerDebitAmount,
+                creditAccount: 'Vendor Payable',
+                creditAmount: ledgerDebitAmount,
+                linkedEntityId: vendorId,
+                createdBy
             });
 
             logger.info('Ledger entry created for inventory addition.');
@@ -100,6 +101,8 @@ export const createInventory = async (req, res) => {
 
 import moment from 'moment';
 import {softErrorResponse} from "../utils/responseHandler.js";
+import mongoose from "mongoose";
+import {createDoubleLedgerEntry} from "../utils/ledgerService.js";
 
 export const printBarCodes = async (req, res) => {
     try {
