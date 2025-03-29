@@ -5,7 +5,7 @@ import {
     getEntityById,
     updateEntity,
     softDeleteEntity,
-    restoreEntity
+    restoreEntity, getNonAccountEntities
 } from '../controllers/entities.controller.js';
 
 import authMiddleware from '../middlewares/auth.middleware.js';
@@ -26,6 +26,8 @@ router.post('/', authMiddleware, validationMiddleware, createEntity);
  * @access Private
  */
 router.get('/', authMiddleware, getAllEntities);
+
+router.get('/getNonAccounts', authMiddleware, getNonAccountEntities);
 
 /**
  * @route GET /api/v1/entities/:id

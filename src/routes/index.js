@@ -18,6 +18,7 @@ import discountsRoutes from './discounts.routes.js';
 import subscriptionPlansRoutes from './subscriptionPlans.routes.js';
 import auditLogsRoutes from './auditLogs.routes.js';
 import adminRoutes from "./admin.routes.js";
+import accountRoutes from "./account.routes.js";
 
 const router = express.Router();
 
@@ -39,5 +40,6 @@ router.use('/taxConfigurations', taxConfigurationsRoutes);
 router.use('/discounts', discountsRoutes);
 router.use('/subscriptionPlans', subscriptionPlansRoutes);
 router.use('/auditLogs', auditLogsRoutes);
+router.use('/accounts', accountRoutes);
 
 export default router;

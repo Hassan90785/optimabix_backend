@@ -1,5 +1,6 @@
 import {AuditLog, Entities} from '../models/index.js';
 import {errorResponse, logger, successResponse} from '../utils/index.js';
+import Account from "../models/account.model.js";
 
 /**
  * @desc Create a new entity (Customer, Vendor, or Both)
@@ -78,7 +79,44 @@ export const getAllEntities = async (req, res) => {
         return errorResponse(res, error.message);
     }
 };
+/**
+ * @desc Get all entities that are not account holders
+ * @param req
+ * @param res
+ * @returns {Promise<*>}
+ */
+export const getNonAccountEntities = async (req, res) => {
+    try {
+        logger.info('Fetching non-account holder entities...');
+        const { entityType, page = 1, limit = 10, companyId } = req.query;
 
+        // Get all entityIds that already have accounts
+        const accountEntityIds = await Account.find({ companyId }).distinct('entityId');
+
+        // Filter for entities that are NOT in accountEntityIds
+        const filter = {
+            companyId,
+            ...(entityType && { entityType }),
+            _id: { $nin: accountEntityIds }
+        };
+
+        const entities = await Entities.find(filter)
+            .skip((page - 1) * limit)
+            .limit(Number(limit));
+
+        const totalRecords = await Entities.countDocuments(filter);
+
+        return successResponse(res, {
+            entities,
+            totalRecords,
+            currentPage: Number(page),
+            totalPages: Math.ceil(totalRecords / limit)
+        }, 'Non-account holder entities fetched successfully');
+    } catch (error) {
+        logger.error('Error fetching non-account holder entities:', error);
+        return errorResponse(res, error.message);
+    }
+};
 /**
  * @desc Get an entity by ID
  * @route GET /api/v1/entities/:id
