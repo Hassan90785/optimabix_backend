@@ -1,5 +1,6 @@
 import express from 'express';
 import {
+    createPaymentTransaction,
     createPOSTransaction,
     getAllPOSTransactions,
     getPOSTransactionById,
@@ -17,6 +18,10 @@ const router = express.Router();
  * @access Private
  */
 router.post('/', authMiddleware, validationMiddleware, createPOSTransaction);
+/**
+ * @route POST /api/v1/posTransactions/paymentTransaction
+ */
+router.post('/paymentTransaction', authMiddleware, validationMiddleware, createPaymentTransaction);
 
 /**
  * @route GET /api/v1/posTransactions

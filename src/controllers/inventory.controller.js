@@ -5,58 +5,35 @@ import {validationResult} from "express-validator";
 export const createInventory = async (req, res) => {
     try {
         logger.info('Creating or updating inventory...');
-        const {productId, companyId, vendorId, barcode, batches, createdBy} = req.body;
+        const { productId, companyId, vendorId, barcode, batches, createdBy } = req.body;
 
         // Validate product existence
         const productExists = await Products.findById(productId);
-        console.log('productExists', productExists)
         if (!productExists) {
             return errorResponse(res, 'Product not found.', 404);
         }
 
-        // Check for existing inventory
-        const existingInventory = await Inventory.findOne({productId, companyId, vendorId});
-        let totalQuantity = 0;
+        // Ensure batches is always an array
+        const newBatches = Array.isArray(batches) ? batches : [batches];
+        let totalQuantity = newBatches.reduce((sum, batch) => sum + batch.quantity, 0);
         let ledgerDescription = '';
-        let ledgerDebitAmount = 0;
-        let debitCaption = '';
-        let creditCaption = '';
+        let ledgerDebitAmount = totalQuantity * productExists.price.unitPurchasePrice;
+        const debitCaption = 'Inventory';
+        const creditCaption = 'Vendor Payable';
+
+        let inventoryRecord;
+        const existingInventory = await Inventory.findOne({ productId, companyId, vendorId });
 
         if (existingInventory) {
             logger.info('Updating existing inventory...');
-            console.log('batches', batches);
-
-            // Ensure batches is an array
-            const newBatches = Array.isArray(batches) ? batches : [batches];
-
-            // Add new batch to existing batches
             existingInventory.batches.push(...newBatches);
-
-            // Calculate total quantity for the new batches
-            const newBatchQuantity = newBatches.reduce((sum, batch) => sum + batch.quantity, 0);
-            existingInventory.totalQuantity += newBatchQuantity;
-
-            // Save updated inventory
-            await existingInventory.save();
-
-            totalQuantity = newBatchQuantity;
+            existingInventory.totalQuantity += totalQuantity;
+            inventoryRecord = await existingInventory.save();
             ledgerDescription = `Updated inventory for Product: ${productId}`;
-            ledgerDebitAmount = newBatchQuantity * productExists.price.unitPurchasePrice; // Assuming cost price is available in product
-            debitCaption = 'Inventory';
-            creditCaption = 'Vendor Payable';
             logger.info(`Inventory updated for Product: ${productId}`);
-            successResponse(res, existingInventory, 'Inventory updated successfully');
         } else {
             logger.info('Creating new inventory...');
-            console.log('batches', batches);
-            // Ensure batches is an array
-            const newBatches = Array.isArray(batches) ? batches : [batches];
-            console.log('newBatches', newBatches);
-            // Calculate total quantity from new batches
-            totalQuantity = newBatches.reduce((sum, batch) => sum + batch.quantity, 0);
-
-            // Create new inventory record
-            const newInventory = await Inventory.create({
+            inventoryRecord = await Inventory.create({
                 productId,
                 companyId,
                 vendorId,
@@ -64,45 +41,61 @@ export const createInventory = async (req, res) => {
                 totalQuantity,
                 createdBy,
             });
-            console.log('newInventory:', newInventory);
             ledgerDescription = `Added inventory for Product: ${productId}`;
-            ledgerDebitAmount = totalQuantity * productExists.price.unitPurchasePrice; // Assuming cost price is available in product
-            debitCaption = 'Inventory';
-            creditCaption = 'Vendor Payable';
             logger.info(`Inventory added for Product: ${productId}`);
-            successResponse(res, newInventory, 'Inventory created successfully');
         }
 
-        // Add ledger entry
+        // 📌 Check for existing vendor account
+        let accountId;
+        const existingAccount = await Account.findOne({ entityId: vendorId, companyId, isDeleted: false });
+        if (existingAccount) {
+            accountId = existingAccount._id;
+        } else {
+            const newAccount = await Account.create({
+                entityId: vendorId,
+                entityType: 'Vendor',
+                status: 'Active',
+                companyId,
+                createdBy
+            });
+            accountId = newAccount._id;
+            logger.info(`Account created for Vendor ${vendorId}`);
+        }
+
+        // 💰 Create ledger entry
         if (ledgerDebitAmount > 0) {
             await createDoubleLedgerEntry({
                 companyId,
-                transactionId: new mongoose.Types.ObjectId().toString(), // or link to Inventory _id if needed
+                transactionId: new mongoose.Types.ObjectId().toString(),
                 transactionType: 'Purchase',
                 referenceType: 'Inventory',
                 description: ledgerDescription,
-                debitAccount: 'Inventory',
+                debitAccount: debitCaption,
                 debitAmount: ledgerDebitAmount,
-                creditAccount: 'Vendor Payable',
+                creditAccount: creditCaption,
                 creditAmount: ledgerDebitAmount,
                 linkedEntityId: vendorId,
+                accountId, // ✅ Include accountId
                 createdBy
             });
-
             logger.info('Ledger entry created for inventory addition.');
         } else {
-            logger.error(`Couldn't add Ledger Entry for inventory addition due to ledgerDebitAmount: ${ledgerDebitAmount}`)
+            logger.error(`Skipped Ledger Entry: Invalid ledgerDebitAmount: ${ledgerDebitAmount}`);
         }
+
+        return successResponse(res, inventoryRecord, existingInventory ? 'Inventory updated successfully' : 'Inventory created successfully');
     } catch (error) {
         logger.error('Error creating or updating inventory:', error);
         return errorResponse(res, error.message);
     }
 };
 
+
 import moment from 'moment';
 import {softErrorResponse} from "../utils/responseHandler.js";
 import mongoose from "mongoose";
 import {createDoubleLedgerEntry} from "../utils/ledgerService.js";
+import Account from "../models/account.model.js";
 
 export const printBarCodes = async (req, res) => {
     try {

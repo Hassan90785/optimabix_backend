@@ -20,8 +20,13 @@ export const createPOSTransaction = async (req, res) => {
             paymentMethod,
             paidAmount,
             createdBy,
+            accountId,
+            linkedEntityId,
             changeGiven
         } = req.body;
+        console.log('BODY::', JSON.stringify(req.body, null, 2));
+
+        console.log('accountId::', accountId); // This will show the actual value reliably
 
         // Generate a unique transaction number if necessary (you can use an auto-increment or UUID logic here)
 
@@ -36,12 +41,15 @@ export const createPOSTransaction = async (req, res) => {
             paymentMethod,
             paidAmount,
             changeGiven,
+            accountId,
+            linkedEntityId,
             createdBy
         }], {session});
         logger.info(`POS Transaction created: ${newTransaction.transactionNumber}`);
         /**
          * Payment Handling
          */
+
             // Create a new payment record
         const [payment] = await Payments.create([{
                 companyId,
@@ -102,7 +110,6 @@ export const createPOSTransaction = async (req, res) => {
                 companyId,
                 transactionId: newTransaction._id,
                 ledgerEntryId: null, // Placeholder; update with actual ledger entry logic if needed
-                linkedEntityId: null, // Optional, depending on the customer or vendor
                 lineItems: products.map(product => ({
                     productId: product.productId,
                     batchId: product.batchId || null,
@@ -115,6 +122,7 @@ export const createPOSTransaction = async (req, res) => {
                 taxAmount,
                 totalAmount: totalPayable,
                 paymentStatus: paidAmount >= totalPayable ? 'Paid' : 'Partial',
+                linkedEntityId,
                 createdBy,
                 notes: 'Invoice for the transaction'
             }], {session});
@@ -140,6 +148,8 @@ export const createPOSTransaction = async (req, res) => {
             debitAmount: subTotal,
             creditAccount: 'Sales Revenue',
             creditAmount: subTotal,
+            linkedEntityId,
+            accountId,
             createdBy
         });
 
@@ -154,6 +164,8 @@ export const createPOSTransaction = async (req, res) => {
                 debitAccount: saleDebitAccount,
                 debitAmount: parseFloat(taxAmount),
                 creditAccount: 'Tax Payable',
+                accountId,
+                linkedEntityId,
                 creditAmount: parseFloat(taxAmount),
                 createdBy
             });
@@ -171,6 +183,8 @@ export const createPOSTransaction = async (req, res) => {
                 creditAccount: isCreditSale ? 'Accounts Receivable' : 'Sales Revenue',
                 debitAmount: parseFloat(discountAmount),
                 creditAmount: parseFloat(discountAmount),
+                linkedEntityId,
+                accountId,
                 createdBy
             });
         }
@@ -187,6 +201,8 @@ export const createPOSTransaction = async (req, res) => {
                 creditAccount: 'Accounts Receivable',
                 debitAmount: paidAmount,
                 creditAmount: paidAmount,
+                linkedEntityId,
+                accountId,
                 createdBy
             });
         }
@@ -214,11 +230,10 @@ export const createPOSTransaction = async (req, res) => {
                 unitPrice: item.unitPrice,
                 totalPrice: item.totalPrice,
                 batchId: item.batchId,
+
                 _id: item._id,
             };
         });
-
-        console.log('Enriched transaction:', transactionObj);
 
 
         const company = await Companies.findById(companyId)
@@ -244,7 +259,6 @@ export const createPOSTransaction = async (req, res) => {
          * PDF handling
          * @type {string}
          */
-        console.log('receiptData:: ', receiptData)
 
         const receiptPath = `${process.env.UPLOAD_PATH}/${newTransaction.transactionNumber}.pdf`;
         const pdfPath = await generatePDF('posReceipt', receiptData, receiptPath);
@@ -268,6 +282,80 @@ export const createPOSTransaction = async (req, res) => {
     } finally {
         // Ensure the session is ended
         await session.endSession();
+    }
+};
+/**
+ * @desc Record a payment transaction
+ * @param req
+ * @param res
+ * @returns {Promise<*>}
+ */
+
+export const createPaymentTransaction = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const {
+            companyId,
+            accountId,
+            linkedEntityId,
+            amount,
+            paymentMethod,
+            paymentReference,
+            createdBy
+        } = req.body;
+
+        // Generate transaction ID manually (optional, or auto via MongoDB _id)
+        const [newTransaction] = await POSTransaction.create([{
+            companyId,
+            entityId: linkedEntityId,
+            accountId,
+            transactionType: 'Payment',
+            description: 'Payment received from customer',
+            paidAmount: amount,
+            transactionMethod: paymentMethod,
+            createdBy,
+            date: new Date()
+        }], {session});
+
+        // 1. Create Payment Record
+        const [payment] = await Payments.create([{
+            companyId,
+            transactionId: newTransaction._id,  // ✅ FIXED: field name added
+            paymentMethod,
+            amountPaid: amount,
+            paymentStatus: 'Completed',
+            createdBy,
+            paidBy: linkedEntityId
+        }], {session});
+
+        // 2. Ledger Entry
+        await createDoubleLedgerEntry({
+            transactionId: newTransaction._id.toString(),  // ✅ FIXED: pass the ID
+            companyId,
+            transactionType: 'Payment',
+            referenceType: 'Payments',
+            description: `Payment received from account customer`,
+            debitAccount: 'Cash/Bank',
+            creditAccount: 'Accounts Receivable',
+            debitAmount: amount,
+            creditAmount: amount,
+            accountId,
+            linkedEntityId,
+            createdBy
+        });
+
+        await session.commitTransaction();
+        await session.endSession();
+
+        return successResponse(res, {payment}, 'Payment recorded successfully');
+
+    } catch (error) {
+        logger.error('Error recording payment:', error);
+        await session.abortTransaction();
+        await session.endSession();
+        return errorResponse(res, error.message);
     }
 };
 

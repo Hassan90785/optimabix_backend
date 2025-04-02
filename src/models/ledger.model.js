@@ -56,7 +56,10 @@ const ledgerSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Invoices'
     },
-
+    accountId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Account'
+    },
     // Soft Deletion and Auditing Fields
     isDeleted: {
         type: Boolean,
@@ -65,22 +68,22 @@ const ledgerSchema = new mongoose.Schema({
     },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Users',
+        ref: 'User',
         required: true
     },
     updatedBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Users'
+        ref: 'User'
     },
     deletedBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Users'
+        ref: 'User'
     }
-}, { timestamps: true });
+}, {timestamps: true});
 
 // Soft delete filter
 ledgerSchema.pre(/^find/, function (next) {
-    this.where({ isDeleted: false });
+    this.where({isDeleted: false});
     next();
 });
 

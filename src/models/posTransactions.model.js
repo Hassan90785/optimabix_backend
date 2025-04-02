@@ -47,7 +47,9 @@ const posTransactionSchema = new mongoose.Schema({
     ],
     subTotal: {
         type: Number,
-        required: true
+        required: function () {
+            return this.transactionType === 'Sale';
+        }
     },
     discountAmount: {
         type: Number,
@@ -59,12 +61,16 @@ const posTransactionSchema = new mongoose.Schema({
     },
     totalPayable: {
         type: Number,
-        required: true
+        required: function () {
+            return this.transactionType === 'Sale';
+        }
     },
     paymentMethod: {
         type: String,
-        enum: ['Cash', 'Credit Card', 'Bank Transfer'],
-        required: true
+        enum: ['Cash', 'Credit Card', 'Bank Transfer', 'Credit'],
+        required: function () {
+            return this.transactionType === 'Sale';
+        }
     },
     paymentReference: {
         type: String,
@@ -72,7 +78,9 @@ const posTransactionSchema = new mongoose.Schema({
     },
     paidAmount: {
         type: Number,
-        required: true
+        required: function () {
+            return this.transactionType === 'Sale';
+        }
     },
     changeGiven: {
         type: Number,
@@ -86,6 +94,10 @@ const posTransactionSchema = new mongoose.Schema({
     ledgerEntryId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Ledger'
+    },
+    accountId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Account'
     },
     // Soft Deletion and Auditing Fields
     isDeleted: {

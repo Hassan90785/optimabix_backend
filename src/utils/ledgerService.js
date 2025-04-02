@@ -15,6 +15,7 @@ export async function createDoubleLedgerEntry({
                                                   creditAmount,
                                                   linkedEntityId = null,
                                                   invoiceId = null,
+                                                  accountId = null,
                                                   createdBy
                                               }) {
     if (debitAmount !== creditAmount) {
@@ -34,6 +35,7 @@ export async function createDoubleLedgerEntry({
             amount: debitAmount,
             linkedEntityId,
             invoiceId,
+            accountId,
             createdBy
         },
         {
@@ -48,6 +50,7 @@ export async function createDoubleLedgerEntry({
             amount: creditAmount,
             linkedEntityId,
             invoiceId,
+            accountId,
             createdBy
         }
     ]);

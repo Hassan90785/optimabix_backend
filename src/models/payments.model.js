@@ -17,8 +17,8 @@ const paymentSchema = new mongoose.Schema({
     },
     paymentMethod: {
         type: String,
-        enum: ['Cash', 'Credit Card', 'Bank Transfer', 'Split Payment'],
-        required: true
+        enum: ['Cash', 'Credit Card', 'Bank Transfer', 'Split Payment', 'Credit']
+
     },
     amountPaid: {
         type: Number,

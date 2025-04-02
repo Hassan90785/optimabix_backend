@@ -11,36 +11,47 @@ export const createLedgerEntry = async (req, res) => {
             companyId,
             description,
             linkedEntityId,
+            accountId,
             transactionType,
-            debitAmount,
-            creditAmount,
+            entryType,
+            amount,
             referenceId,
-            referenceType
+            referenceType,
+            items = [],
+            tax = 0,
+            discount = 0,
+            isSystemGenerated = false,
+            notes = '',
+            createdBy // <-- received from frontend
         } = req.body;
-
-        // Calculate balance (credit - debit)
-        const balance = creditAmount - debitAmount;
 
         const newLedgerEntry = await Ledger.create({
             companyId,
             description,
             linkedEntityId,
+            accountId,
             transactionType,
-            debitAmount,
-            creditAmount,
-            balance,
+            entryType,
+            amount,
             referenceId,
             referenceType,
-            createdBy: req.user._id
+            items,
+            tax,
+            discount,
+            isSystemGenerated,
+            notes,
+            createdBy,
+            date: new Date()
         });
 
-        logger.info(`Ledger entry created for company: ${companyId}`);
+        logger.info(`Ledger entry created [${transactionType}] for company: ${companyId}`);
         return successResponse(res, newLedgerEntry, 'Ledger entry created successfully');
     } catch (error) {
         logger.error('Error creating ledger entry:', error);
         return errorResponse(res, error.message);
     }
 };
+
 
 /**
  * @desc Get all ledger entries with pagination and filtering
@@ -49,16 +60,26 @@ export const createLedgerEntry = async (req, res) => {
  */
 export const getAllLedgerEntries = async (req, res) => {
     try {
-        const {companyId, page = 1, limit = 10} = req.query;
-        const filter = {companyId, isDeleted: false};
+        const { companyId, accountId, page = 1, limit = 1000 } = req.query;
+
+        const filter = {
+            companyId,
+            isDeleted: false
+        };
+
+        if (accountId) {
+            filter.accountId = accountId;
+        }
 
         const ledgerEntries = await Ledger.find(filter)
-            .sort({date: -1})
+            .sort({ date: -1 })
             .skip((page - 1) * limit)
             .limit(Number(limit))
-            .populate('linkedEntityId');
+            .populate('linkedEntityId', 'entityName entityType')
+            .populate('createdBy', 'name');
 
         const totalRecords = await Ledger.countDocuments(filter);
+
         return successResponse(res, {
             ledgerEntries,
             totalRecords,
@@ -70,6 +91,7 @@ export const getAllLedgerEntries = async (req, res) => {
         return errorResponse(res, error.message);
     }
 };
+
 
 /**
  * @desc Get a single ledger entry by ID
