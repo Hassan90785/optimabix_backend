@@ -1,5 +1,6 @@
 import {Ledger} from '../models/index.js';
 import {errorResponse, logger, successResponse} from '../utils/index.js';
+import Account from "../models/account.model.js";
 
 /**
  * @desc Create a ledger entry with auditing and financial handling
@@ -58,6 +59,8 @@ export const createLedgerEntry = async (req, res) => {
  * @route GET /api/v1/ledger
  * @queryParams ?companyId=123&page=1&limit=10
  */
+
+
 export const getAllLedgerEntries = async (req, res) => {
     try {
         const { companyId, accountId, page = 1, limit = 1000 } = req.query;
@@ -71,6 +74,7 @@ export const getAllLedgerEntries = async (req, res) => {
             filter.accountId = accountId;
         }
 
+        // Fetch paginated ledger entries
         const ledgerEntries = await Ledger.find(filter)
             .sort({ date: -1 })
             .skip((page - 1) * limit)
@@ -80,17 +84,47 @@ export const getAllLedgerEntries = async (req, res) => {
 
         const totalRecords = await Ledger.countDocuments(filter);
 
-        return successResponse(res, {
-            ledgerEntries,
+        // Default response wrapper
+        const responseWrapper = {
+            _id: accountId || null,
+            entityName: null,
+            entityType: null,
+            totalAmountDue: null,
+            totalAmountReceived: null,
+            totalDiscountGiven: null,
+            totalTaxCharged: null,
+            balance: null,
+            entries: ledgerEntries,
             totalRecords,
             currentPage: Number(page),
             totalPages: Math.ceil(totalRecords / limit)
-        }, 'Ledger entries fetched successfully');
+        };
+
+        if (accountId) {
+            const account = await Account.findOne({ _id: accountId, companyId, isDeleted: false })
+                .populate('entityId', 'entityName entityType');
+
+            if (account) {
+                // Use the utility to calculate totals
+                const summary = calculateLedgerSummary(ledgerEntries);
+
+                responseWrapper.entityName = account.entityId?.entityName || null;
+                responseWrapper.entityType = account.entityId?.entityType || null;
+                responseWrapper.totalAmountDue = summary.totalAmountDue;
+                responseWrapper.totalAmountReceived = summary.totalAmountReceived;
+                responseWrapper.totalDiscountGiven = summary.totalDiscountGiven;
+                responseWrapper.totalTaxCharged = summary.totalTaxCharged;
+                responseWrapper.balance = summary.balance;
+            }
+        }
+
+        return successResponse(res, responseWrapper, 'Ledger entries fetched successfully');
     } catch (error) {
         logger.error('Error fetching ledger entries:', error);
         return errorResponse(res, error.message);
     }
 };
+
 
 
 /**
@@ -128,4 +162,69 @@ export const softDeleteLedger = async (req, res) => {
         logger.error('Error soft deleting ledger entry:', error);
         return errorResponse(res, error.message);
     }
+};
+
+
+export const calculateLedgerSummary = (ledgerEntries = []) => {
+    let totalAmountDue = 0;
+    let totalAmountReceived = 0;
+    let totalDiscountGiven = 0;
+    let totalTaxCharged = 0;
+
+    for (const entry of ledgerEntries) {
+        const { account, entryType, amount } = entry;
+
+        if (!account || !entryType || typeof amount !== 'number') continue;
+
+        switch (account) {
+            case 'Accounts Receivable':
+                if (entryType === 'debit') {
+                    totalAmountDue += amount;
+                } else if (entryType === 'credit') {
+                    // Don't include in totalAmountReceived directly
+                    // We'll handle this when account is Cash/Bank or classify source
+                }
+                break;
+
+            case 'Discount Expense':
+                if (entryType === 'debit') {
+                    totalDiscountGiven += amount;
+                }
+                break;
+
+            case 'Tax Payable':
+                if (entryType === 'credit') {
+                    totalTaxCharged += amount;
+                }
+                break;
+
+            case 'Vendor Payable':
+                if (entryType === 'credit') {
+                    totalAmountDue += amount;
+                } else if (entryType === 'debit') {
+                    totalAmountReceived += amount;
+                }
+                break;
+
+            case 'Cash/Bank':
+                if (entryType === 'debit') {
+                    totalAmountReceived += amount;
+                }
+                break;
+
+            // Add any other cases you want to track
+            default:
+                break;
+        }
+    }
+
+    const balance = totalAmountDue - totalAmountReceived;
+
+    return {
+        totalAmountDue,
+        totalAmountReceived,
+        totalDiscountGiven,
+        totalTaxCharged,
+        balance
+    };
 };
