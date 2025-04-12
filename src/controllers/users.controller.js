@@ -173,3 +173,34 @@ export const deleteUser = async (req, res) => {
         return errorResponse(res, error.message);
     }
 };
+/**
+ * @desc Change user password
+ * @param req
+ * @param res
+ * @returns {Promise<*>}
+ */
+
+export const changePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword, userId } = req.body;
+
+        const user = await Users.findById(userId);
+        if (!user) return errorResponse(res, 'User not found', 404);
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) return errorResponse(res, 'Current password is incorrect', 400);
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+        user.password = hashedPassword;
+        await user.save();
+
+        logger.info(`User changed password: ${user.username}`);
+        return successResponse(res, null, 'Password updated successfully');
+    } catch (error) {
+        logger.error('Error during password change:', error);
+        return errorResponse(res, error.message);
+    }
+};
+

@@ -5,7 +5,7 @@ import {
     getAllUsers,
     getUserById,
     updateUser,
-    deleteUser
+    deleteUser, changePassword
 } from '../controllers/users.controller.js';
 
 import authMiddleware from '../middlewares/auth.middleware.js';
@@ -26,6 +26,11 @@ router.post('/', authMiddleware, validationMiddleware, createUser);
  * @access Public
  */
 router.post('/login', loginUser);
+
+/**
+ * @route POST /api/v1/users/changePassword
+ */
+router.post('/changePassword', changePassword);
 
 /**
  * @route GET /api/v1/users
