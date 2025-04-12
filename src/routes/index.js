@@ -19,6 +19,7 @@ import subscriptionPlansRoutes from './subscriptionPlans.routes.js';
 import auditLogsRoutes from './auditLogs.routes.js';
 import adminRoutes from "./admin.routes.js";
 import accountRoutes from "./account.routes.js";
+import dashboardRoutes from "./dashboard.routes.js";
 
 const router = express.Router();
 
@@ -41,5 +42,6 @@ router.use('/discounts', discountsRoutes);
 router.use('/subscriptionPlans', subscriptionPlansRoutes);
 router.use('/auditLogs', auditLogsRoutes);
 router.use('/accounts', accountRoutes);
+router.use('/dashboard', dashboardRoutes);
 
 export default router;
