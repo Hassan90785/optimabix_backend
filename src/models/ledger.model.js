@@ -35,6 +35,9 @@ const ledgerSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
+    entryGroupId: {
+        type: String
+    },
     linkedEntityId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Entities',

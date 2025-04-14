@@ -1,6 +1,7 @@
 // services/ledgerService.js
 
 import {Ledger} from "../models/index.js";
+import {v4 as uuidv4} from 'uuid';
 
 export async function createDoubleLedgerEntry({
                                                   transactionId,
@@ -21,7 +22,7 @@ export async function createDoubleLedgerEntry({
     if (debitAmount !== creditAmount) {
         throw new Error('Debit and credit amounts must match for double-entry.');
     }
-
+    const entryGroupId = uuidv4();
     const entries = await Ledger.insertMany([
         {
             transactionId,
@@ -35,6 +36,7 @@ export async function createDoubleLedgerEntry({
             amount: debitAmount,
             linkedEntityId,
             invoiceId,
+            entryGroupId: entryGroupId,
             accountId,
             createdBy
         },
@@ -51,6 +53,7 @@ export async function createDoubleLedgerEntry({
             linkedEntityId,
             invoiceId,
             accountId,
+            entryGroupId: entryGroupId,
             createdBy
         }
     ]);

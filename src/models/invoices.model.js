@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
-import Counter from "multer/lib/counter.js";
-
+import Counter from "./counter.model.js";
 const invoiceSchema = new mongoose.Schema({
     companyId: {
         type: mongoose.Schema.Types.ObjectId,
