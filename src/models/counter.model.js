@@ -6,7 +6,13 @@ const counterSchema = new mongoose.Schema({
 
     // 'seq' holds the current sequence value
     seq: { type: Number, default: 0 },
+    companyId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Companies',
+        required: true
+    }
 });
 
-// Export Mongoose model named "Counter"
+counterSchema.index({ name: 1, companyId: 1 }, { unique: true });
+
 export default mongoose.model('Counter', counterSchema);

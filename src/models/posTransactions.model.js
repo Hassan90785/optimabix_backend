@@ -152,16 +152,16 @@ posTransactionSchema.pre('save', async function(next) {
         this.transactionNumber = `${prefix}-${counter.toString().padStart(6, '0')}`; // Ensure a 6-digit counter
         try {
             const result = await Counter.findOneAndUpdate(
-                { name: 'POSTransactionCounter' }, // or any unique name you want
-                { $inc: { seq: 1 } },             // increment seq by 1
-                { new: true, upsert: true }       // create if not existing
+                { name: 'POSTransactionCounter', companyId: this.companyId },
+                { $inc: { seq: 1 } },
+                { new: true, upsert: true }
             );
 
-            // Assign the new sequence value to counterNumber
             this.counterNumber = result.seq;
         } catch (error) {
             return next(error);
         }
+
     }
     next();
 });

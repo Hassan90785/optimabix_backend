@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import Counter from "multer/lib/counter.js";
 
 const invoiceSchema = new mongoose.Schema({
     companyId: {
@@ -72,6 +73,9 @@ const invoiceSchema = new mongoose.Schema({
     totalAmount: {
         type: Number,
         required: true
+    },counterNumber: {
+        type: Number,
+        unique: true
     },
     paymentStatus: {
         type: String,
@@ -120,6 +124,19 @@ invoiceSchema.pre('save', async function (next) {
         const timestamp = Date.now();
         const randomSuffix = Math.floor(Math.random() * 1000);
         this.invoiceNumber = `INV-${timestamp}-${randomSuffix}`;
+    }
+    if (this.isNew) {
+        try {
+            const result = await Counter.findOneAndUpdate(
+                { name: 'InvoiceCounter', companyId: this.companyId },
+                { $inc: { seq: 1 } },
+                { new: true, upsert: true }
+            );
+
+            this.counterNumber = result.seq;
+        } catch (err) {
+            return next(err);
+        }
     }
     next();
 });

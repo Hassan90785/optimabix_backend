@@ -16,7 +16,6 @@ const generatePDF = async (templateName, data, outputPath) => {
 
         const page = await browser.newPage();
         await page.setContent(html);
-
         // Custom page size for 80mm x 297mm (48-column thermal paper)
         await page.pdf({
             path: outputPath,

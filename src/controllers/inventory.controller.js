@@ -1,6 +1,11 @@
 import {Inventory, Ledger, Products} from '../models/index.js';
 import {errorResponse, generatePDF, logger, successResponse} from '../utils/index.js';
 import {validationResult} from "express-validator";
+import moment from 'moment';
+import {softErrorResponse} from "../utils/responseHandler.js";
+import mongoose from "mongoose";
+import {createDoubleLedgerEntry} from "../utils/ledgerService.js";
+import Account from "../models/account.model.js";
 
 export const createInventory = async (req, res) => {
     try {
@@ -51,15 +56,18 @@ export const createInventory = async (req, res) => {
         if (existingAccount) {
             accountId = existingAccount._id;
         } else {
-            const newAccount = await Account.create({
+            const account = new Account({
                 entityId: vendorId,
                 entityType: 'Vendor',
                 status: 'Active',
                 companyId,
                 createdBy
             });
-            accountId = newAccount._id;
+
+            await account.save();
+            accountId = account._id;
             logger.info(`Account created for Vendor ${vendorId}`);
+
         }
 
         // 💰 Create ledger entry
@@ -90,12 +98,6 @@ export const createInventory = async (req, res) => {
     }
 };
 
-
-import moment from 'moment';
-import {softErrorResponse} from "../utils/responseHandler.js";
-import mongoose from "mongoose";
-import {createDoubleLedgerEntry} from "../utils/ledgerService.js";
-import Account from "../models/account.model.js";
 
 export const printBarCodes = async (req, res) => {
     try {

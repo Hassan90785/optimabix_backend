@@ -239,12 +239,17 @@ export const createPOSTransaction = async (req, res) => {
         const company = await Companies.findById(companyId)
             .select('name registrationNumber contactDetails logo').lean();
         console.log(JSON.stringify(company, null, 2))
-        // Generate PDF receipt
+
+        const isCredit = paymentMethod === 'Credit';
+        const isCash = paymentMethod === 'Cash';
+        const showPaidAmount = paidAmount > 0;
+        const showChange = isCash && changeGiven > 0;
+
         const receiptData = {
             date: new Date().toLocaleString(),
             company,
             products: transactionObj.products,
-            size: transactionObj.products.length,// includes productName and sku
+            size: transactionObj.products.length,
             discountAmount,
             taxAmount,
             subTotal,
@@ -253,7 +258,13 @@ export const createPOSTransaction = async (req, res) => {
             paidAmount,
             changeGiven,
             paymentMethod,
+            isCredit,
+            accountId: isCredit ? accountId : null,
+            isCash,
+            showPaidAmount,
+            showChange
         };
+
 
         /**
          * PDF handling
@@ -261,6 +272,7 @@ export const createPOSTransaction = async (req, res) => {
          */
 
         const receiptPath = `${process.env.UPLOAD_PATH}/${newTransaction.transactionNumber}.pdf`;
+
         const pdfPath = await generatePDF('posReceipt', receiptData, receiptPath);
 
         await session.endSession();

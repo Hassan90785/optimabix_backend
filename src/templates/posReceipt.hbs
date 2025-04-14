@@ -83,6 +83,13 @@
         .summary-section {
             margin-top: 10px;
         }
+        .credit-note {
+            font-size: 11px;
+            color: #666;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+
         .summary-line {
             display: flex;
             justify-content: space-between;
@@ -127,6 +134,13 @@
         </div>
     </div>
 
+    {{#if accountId}}
+        <div class="summary-line" style="margin-top: 10px;">
+            <h5>Account ID:</h5>
+            <span>{{accountId}}</span>
+        </div>
+    {{/if}}
+
     <table class="products-table">
         <thead>
         <tr>
@@ -165,17 +179,36 @@
             <h5>Total Bill:</h5>
             <span>PKR {{totalPayable}}</span>
         </div>
-        <div class="summary-line">
-            <h5>Paid Amount:</h5>
-            <span>PKR {{paidAmount}}</span>
-        </div>
-        <div class="summary-line">
-            <h5>Balance:</h5>
-            <span>PKR {{changeGiven}}</span>
-        </div>
+
+        {{#if showPaidAmount}}
+            <div class="summary-line">
+                <h5>Paid Amount:</h5>
+                <span>PKR {{paidAmount}}</span>
+            </div>
+        {{/if}}
+
+        {{#if isCredit}}
+            <div class="summary-line">
+                <h5>Amount Due:</h5>
+                <span>PKR {{totalPayable}}</span>
+            </div>
+        {{/if}}
+
+        {{#if showChange}}
+            <div class="summary-line">
+                <h5>Change Returned:</h5>
+                <span>PKR {{changeGiven}}</span>
+            </div>
+        {{/if}}
     </div>
 
+
+
     <div class="footer">
+        {{#if isCredit}}
+                <p class="credit-note"><strong>NOTE:</strong> This is a credit sale. Please clear your balance as soon as possible.</p>
+        {{/if}}
+
         <p>Thank you for your purchase!</p>
         <p>{{company.contactDetails.phone}} , {{company.contactDetails.cell}}</p>
         <p>{{company.contactDetails.web}}</p>
