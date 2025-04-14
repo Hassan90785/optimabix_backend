@@ -37,29 +37,12 @@ app.get('/api/v1/hello', (req, res) => {
     res.send('Hello, World!');
 });
 
-// Start Server
-const PORT = process.env.PORT || 8070;
-console.log(process.env.CERT_PATH)
-// Read SSL certificates only if running in production
-let httpsServer;
-if (process.env.NODE_ENV === 'production') {
-    const cert = fs.readFileSync(process.env.CERT_PATH);
-    const ca = fs.readFileSync(process.env.CA_PATH);
-    const key = fs.readFileSync(process.env.PK_PATH);
-    const httpsOptions = {cert, ca, key};
+// 🟢 Start Server (NO SSL here — NGINX handles it)
+const PORT = process.env.PORT || 3001;
+const HOST = process.env.HOST || '127.0.0.1';
 
-    httpsServer = https.createServer(httpsOptions, app);
-}
-// Start server depending on the environment
-if (process.env.NODE_ENV === 'production') {
-    httpsServer.listen(PORT, process.env.HOST, () => {
-        console.log(`HTTPS server running on https://${process.env.HOST}: ${PORT}`);
-    });
-} else {
-    // Local development server
-    app.listen(PORT, () => {
-        console.log(`Server is running locally at http://localhost:${PORT}`);
-    });
-}
+app.listen(PORT, HOST, () => {
+    console.log(`✅ API running on http://${HOST}:${PORT}`);
+});
 
 export default app;
