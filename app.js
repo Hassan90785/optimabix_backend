@@ -4,8 +4,6 @@ import connectDB from './src/config/db.config.js';
 import routes from './src/routes/index.js';
 import errorMiddleware from './src/middlewares/error.middleware.js';
 import cors from 'cors';
-import https from "https";
-import fs from "fs";
 
 // Load environment variables from .env file based on environment
 if (process.env.NODE_ENV === 'local') {
@@ -17,7 +15,17 @@ if (process.env.NODE_ENV === 'local') {
 
 // Initialize Express App
 const app = express();
-app.use(cors({origin: process.env.CORS_ORIGIN || '*'}));
+app.use(cors({
+    origin: true, // ✅ Reflects request origin automatically
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true, // ✅ Required if you're using cookies/JWT with frontend
+    optionsSuccessStatus: 204
+}));
+
+app.options('*', cors()); // ✅ Handles preflight
+
+
 app.use(json({limit: '50mb'}));
 
 
