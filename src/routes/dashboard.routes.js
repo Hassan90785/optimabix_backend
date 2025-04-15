@@ -7,7 +7,7 @@ const router = express.Router();
 // Apply auth middleware to all routes
 router.use(authMiddleware);
 /**
- * @route GET /api/v1/dashboard
+ * @route POST /api/v1/dashboard
  */
 router.post('/', getDashboard);
 

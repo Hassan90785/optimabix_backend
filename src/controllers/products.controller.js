@@ -1,4 +1,4 @@
-import {Products} from '../models/index.js';
+import {Inventory, Products} from '../models/index.js';
 import {errorResponse, logger, successResponse} from '../utils/index.js';
 import CompanyMetadata from "../models/companyMetadata.model.js";
 import {formatName} from "../utils/formatName.js";
@@ -113,20 +113,40 @@ export const getCompanyMetadata = async (req, res) => {
  * @route GET /api/v1/products
  * @queryParams ?category=Electronics&page=1&limit=10
  */
+
 export const getAllProducts = async (req, res) => {
     try {
-        const {category, companyId, page = 1, limit = 10} = req.query;
-        const filter = {isDeleted: false, companyId};
+        const { category, companyId, page = 1, limit = 10 } = req.query;
+        const filter = { isDeleted: false, companyId };
 
         if (category) filter.category = category;
 
-        const products = await Products.find(filter)
-            .skip((page - 1) * limit)
-            .limit(Number(limit));
+        const skip = (page - 1) * limit;
+        const products = await Products.find(filter).skip(skip).limit(Number(limit));
+
+        // 🔍 Get product IDs from retrieved products
+        const productIds = products.map(p => p._id);
+
+        // 🔗 Get inventory records for those product IDs
+        const inventoryLinks = await Inventory.find({
+            productId: { $in: productIds },
+            isDeleted: false
+        }).select('productId');
+
+        const inventoryProductIds = new Set(inventoryLinks.map(inv => inv.productId.toString()));
+
+        // 🧩 Add 'hasInventory' field to each product
+        const enrichedProducts = products.map(product => {
+            const hasInventory = inventoryProductIds.has(product._id.toString());
+            return {
+                ...product.toObject(), // convert Mongoose doc to plain object
+                hasInventory
+            };
+        });
 
         const totalRecords = await Products.countDocuments(filter);
         return successResponse(res, {
-            products,
+            products: enrichedProducts,
             totalRecords,
             currentPage: Number(page),
             totalPages: Math.ceil(totalRecords / limit)
@@ -136,6 +156,7 @@ export const getAllProducts = async (req, res) => {
         return errorResponse(res, error.message);
     }
 };
+
 
 /**
  * @desc Get a single product by ID
@@ -209,7 +230,7 @@ export const softDeleteProduct = async (req, res) => {
             return errorResponse(res, 'Product not found.', 404);
         }
 
-        await product.softDelete(req.user._id);
+        await product.softDelete(req.params.id);
         logger.info(`Product soft-deleted: ${product.productName}`);
         return successResponse(res, {}, 'Product soft-deleted successfully');
     } catch (error) {

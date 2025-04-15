@@ -3,15 +3,17 @@ import {
     createEntity,
     getAllEntities,
     getEntityById,
-    updateEntity,
+    getNonAccountEntities,
+    restoreEntity,
     softDeleteEntity,
-    restoreEntity, getNonAccountEntities
+    updateEntity
 } from '../controllers/entities.controller.js';
 
 import authMiddleware from '../middlewares/auth.middleware.js';
 import validationMiddleware from '../middlewares/validation.middleware.js';
 
 const router = express.Router();
+router.get('/getNonAccounts', authMiddleware, getNonAccountEntities);
 
 /**
  * @route POST /api/v1/entities
@@ -27,7 +29,6 @@ router.post('/', authMiddleware, validationMiddleware, createEntity);
  */
 router.get('/', authMiddleware, getAllEntities);
 
-router.get('/getNonAccounts', authMiddleware, getNonAccountEntities);
 
 /**
  * @route GET /api/v1/entities/:id
