@@ -173,16 +173,19 @@ export const calculateLedgerSummary = (ledgerEntries = []) => {
 
     for (const entry of ledgerEntries) {
         const { account, entryType, amount } = entry;
-
         if (!account || !entryType || typeof amount !== 'number') continue;
 
         switch (account) {
             case 'Accounts Receivable':
                 if (entryType === 'debit') {
-                    totalAmountDue += amount;
-                } else if (entryType === 'credit') {
-                    // Don't include in totalAmountReceived directly
-                    // We'll handle this when account is Cash/Bank or classify source
+                    totalAmountDue += amount; // Gross sale
+                }
+                // We intentionally skip credit here — discount is tracked below
+                break;
+
+            case 'Cash/Bank':
+                if (entryType === 'debit') {
+                    totalAmountReceived += amount;
                 }
                 break;
 
@@ -206,19 +209,12 @@ export const calculateLedgerSummary = (ledgerEntries = []) => {
                 }
                 break;
 
-            case 'Cash/Bank':
-                if (entryType === 'debit') {
-                    totalAmountReceived += amount;
-                }
-                break;
-
-            // Add any other cases you want to track
-            default:
-                break;
+            // Extend with other accounts if needed
         }
     }
 
-    const balance = totalAmountDue - totalAmountReceived;
+    // Net balance = gross - received - discount
+    const balance = totalAmountDue - totalAmountReceived - totalDiscountGiven;
 
     return {
         totalAmountDue,
@@ -228,3 +224,4 @@ export const calculateLedgerSummary = (ledgerEntries = []) => {
         balance
     };
 };
+
