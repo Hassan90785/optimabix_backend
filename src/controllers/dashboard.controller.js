@@ -13,6 +13,9 @@ const getDateRangeFromFilter = (filter, customStartDate, customEndDate) => {
             return {startDate: now.clone().startOf('week'), endDate: now.clone().endOf('day')};
         case 'month':
             return {startDate: now.clone().startOf('month'), endDate: now.clone().endOf('day')};
+        case 'all':
+            return { startDate: moment('2024-01-01'), endDate: now.clone().endOf('day')};
+
         case 'custom':
             return {
                 startDate: moment(customStartDate).startOf('day'),
@@ -21,39 +24,197 @@ const getDateRangeFromFilter = (filter, customStartDate, customEndDate) => {
         default:
             return {startDate: moment('2000-01-01'), endDate: now.clone().endOf('day')};
     }
-};
-
-// 📊 Ledger KPIs
-const getLedgerKPIs = async (companyId, startDate, endDate) => {
-    const match = {
+};const getLedgerKPIs = async (companyId, startDate, endDate) => {
+    const matchBase = {
         companyId: new mongoose.Types.ObjectId(companyId),
         isDeleted: false,
-        date: {$gte: startDate.toDate(), $lte: endDate.toDate()},
+        date: {
+            $gte: startDate.toDate(),
+            $lte: endDate.toDate(),
+        },
     };
 
-    const grouped = await Ledger.aggregate([
-        {$match: match},
-        {$group: {_id: '$transactionType', total: {$sum: '$amount'}}},
-    ]);
+    const [
+        // ✅ Net Sales Revenue (excluding tax and discounts)
+        salesRevenueResult,
 
-    const cashInBank = await Ledger.aggregate([
-        {
-            $match: {
-                ...match,
-                account: 'Cash/Bank',
-                entryType: 'debit',
+        // ✅ Actual Cash Received from Customers
+        cashCollectedResult,
+
+        // ✅ Discounts Given to Customers (all types)
+        discountsGivenResult,
+
+        // ✅ Value of Inventory added (e.g. through Purchases)
+        inventoryValueResult,
+
+        // ✅ All cash inflow (Payments, Purchases, Deposits etc.)
+        cashInBankResult,
+
+        // ✅ Total AR Debits (Amount owed by customers)
+        receivablesDebits,
+
+        // ✅ Total AR Credits (Payments or settlement against receivables)
+        receivablesCredits,
+
+        // ✅ Total Customer count (including dual-role 'Both')
+        customerCount,
+
+        // ✅ Total Vendor count (including dual-role 'Both')
+        vendorCount,
+    ] = await Promise.all([
+        // ✅ Total Net Sales = Sum of credit to 'Sales Revenue'
+        Ledger.aggregate([
+            {
+                $match: {
+                    ...matchBase,
+                    transactionType: "Sale",
+                    account: "Sales Revenue",
+                    entryType: "credit",
+                },
             },
-        },
-        {$group: {_id: null, total: {$sum: '$amount'}}},
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: "$amount" },
+                },
+            },
+        ]),
+
+        // ✅ Payments Received = Cash/Bank debits from 'Payment' transactions
+        Ledger.aggregate([
+            {
+                $match: {
+                    ...matchBase,
+                    transactionType: 'Payment',
+                    account: 'Cash/Bank',
+                    entryType: 'debit',
+                },
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$amount' },
+                },
+            },
+        ]),
+
+        // ✅ Discounts Given = All entries involving 'Discount' accounts
+        Ledger.aggregate([
+            {
+                $match: {
+                    ...matchBase,
+                    account: { $regex: /discount/i },
+                },
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$amount' },
+                },
+            },
+        ]),
+
+        // ✅ Inventory Value = Debit to 'Inventory' account
+        Ledger.aggregate([
+            {
+                $match: {
+                    ...matchBase,
+                    account: 'Inventory',
+                    entryType: 'debit',
+                },
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$amount' },
+                },
+            },
+        ]),
+
+        // ✅ Cash in Bank = All debits to 'Cash/Bank' regardless of transaction type
+        Ledger.aggregate([
+            {
+                $match: {
+                    ...matchBase,
+                    account: 'Cash/Bank',
+                    entryType: 'debit',
+                },
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$amount' },
+                },
+            },
+        ]),
+
+        // ✅ Total AR Debits — credit sales (customer billed)
+        Ledger.aggregate([
+            {
+                $match: {
+                    ...matchBase,
+                    account: 'Accounts Receivable',
+                    entryType: 'debit',
+                },
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$amount' },
+                },
+            },
+        ]),
+
+        // ✅ Total AR Credits — payments received (customer settled)
+        Ledger.aggregate([
+            {
+                $match: {
+                    ...matchBase,
+                    account: 'Accounts Receivable',
+                    entryType: 'credit',
+                },
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$amount' },
+                },
+            },
+        ]),
+
+        // ✅ Customer count from Entities
+        Entities.countDocuments({
+            companyId: new mongoose.Types.ObjectId(companyId),
+            isDeleted: false,
+            type: { $in: ['Customer', 'Both'] },
+        }),
+
+        // ✅ Vendor count from Entities
+        Entities.countDocuments({
+            companyId: new mongoose.Types.ObjectId(companyId),
+            isDeleted: false,
+            type: { $in: ['Vendor', 'Both'] },
+        }),
     ]);
 
-    const getAmount = (type) => grouped.find((k) => k._id === type)?.total || 0;
+    // Helper to extract total from aggregate result
+    const extractTotal = (res) => res?.[0]?.total || 0;
 
+    // Calculate outstanding receivables = AR Debits - AR Credits
+    const totalDebits = extractTotal(receivablesDebits);
+    const totalCredits = extractTotal(receivablesCredits);
+    const outstandingReceivables = totalDebits - totalCredits;
+
+    // Return formatted KPI object
     return {
-        totalSales: getAmount('Sale'),
-        paymentsReceived: getAmount('Payment'),
-        discountsGiven: getAmount('Discount'),
-        cashInBank: cashInBank[0]?.total || 0,
+        totalSales: extractTotal(salesRevenueResult),         // Net Sales Revenue
+        paymentsReceived: extractTotal(cashCollectedResult),  // Cash In from Payments
+        discountsGiven: extractTotal(discountsGivenResult),   // Total Discounts
+        inventoryValue: extractTotal(inventoryValueResult),   // Total Inventory Value Added
+        cashInBank: extractTotal(cashInBankResult),           // Total Cash in Bank (across sources)
+        outstandingReceivables,                               // AR still pending
+        totalCustomers: customerCount,                        // Total Active Customers
+        totalVendors: vendorCount,                            // Total Active Vendors
     };
 };
 

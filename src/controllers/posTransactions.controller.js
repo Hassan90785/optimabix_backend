@@ -380,7 +380,14 @@ export const getAllPOSTransactions = async (req, res) => {
     try {
         const {companyId, startDate, endDate, page = 1, limit = 10000} = req.query;
 
-        const filter = {companyId, isDeleted: false};
+
+        const filter = {
+            isDeleted: false
+        };
+
+        if (companyId) {
+            filter.companyId = new mongoose.Types.ObjectId(companyId);
+        }
 
         if (startDate || endDate) {
             filter.date = {};
@@ -396,15 +403,44 @@ export const getAllPOSTransactions = async (req, res) => {
         console.log('transactions:: ', transactions)
         const totalRecords = await POSTransaction.countDocuments(filter);
 
+        // Totals Calculation
+        let totalCashReceived = 0;
+        let totalCreditSales = 0;
+        let grandSalesTotal = 0;
+
+        for (const txn of transactions) {
+            const paid = txn.paidAmount || 0;
+            const change = txn.changeGiven || 0;
+            const payable = txn.totalPayable || 0;
+
+            const netReceived = paid - change;
+            const isCreditSale = paid < payable;
+
+            totalCashReceived += netReceived;
+            grandSalesTotal += payable;
+
+            if (isCreditSale) {
+                totalCreditSales += payable - paid;
+            }
+        }
+
         return successResponse(res, {
-            transactions, totalRecords, currentPage: Number(page), totalPages: Math.ceil(totalRecords / limit)
+            transactions,
+            totalRecords,
+            currentPage: Number(page),
+            totalPages: Math.ceil(totalRecords / limit),
+            totals: {
+                totalTransactions: transactions.length,
+                totalCashReceived,
+                totalCreditSales,
+                grandSalesTotal
+            }
         }, 'Transactions fetched successfully');
     } catch (error) {
         logger.error('Error fetching transactions:', error);
         return errorResponse(res, error.message);
     }
 };
-
 
 /**
  * @desc Get a single POS transaction by ID

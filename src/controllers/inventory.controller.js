@@ -22,7 +22,14 @@ export const createInventory = async (req, res) => {
         const newBatches = Array.isArray(batches) ? batches : [batches];
         let totalQuantity = newBatches.reduce((sum, batch) => sum + batch.quantity, 0);
         let ledgerDescription = '';
-        let ledgerDebitAmount = totalQuantity * productExists.price.unitPurchasePrice;
+        let ledgerDebitAmount = newBatches.reduce((sum, batch) => {
+            const qty = Number(batch.quantity || 0);
+            const price = batch.purchasePrice != null
+                ? Number(batch.purchasePrice)
+                : Number(productExists.price.unitPurchasePrice || 0);
+            return sum + (qty * price);
+        }, 0);
+
         const debitCaption = 'Inventory';
         const creditCaption = 'Vendor Payable';
 
