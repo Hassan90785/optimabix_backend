@@ -19,6 +19,7 @@ export const createProduct = async (req, res) => {
             price,
             vendorId,
             createdBy,
+            isSerialized,
             companyId,
             batches
         } = req.body;
@@ -62,6 +63,7 @@ export const createProduct = async (req, res) => {
             vendorId,
             companyId,
             createdBy,
+            isSerialized,
             batches
         });
 

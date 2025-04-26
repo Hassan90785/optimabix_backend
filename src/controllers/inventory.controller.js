@@ -1,4 +1,4 @@
-import {Inventory, Ledger, Products} from '../models/index.js';
+import {Inventory, Products} from '../models/index.js';
 import {errorResponse, generatePDF, logger, successResponse} from '../utils/index.js';
 import {validationResult} from "express-validator";
 import moment from 'moment';
@@ -6,110 +6,169 @@ import {softErrorResponse} from "../utils/responseHandler.js";
 import mongoose from "mongoose";
 import {createDoubleLedgerEntry} from "../utils/ledgerService.js";
 import Account from "../models/account.model.js";
+import InventoryUnits from "../models/inventoryUnits.model.js";
 
 export const createInventory = async (req, res) => {
-    try {
-        logger.info('Creating or updating inventory...');
-        const { productId, companyId, vendorId, barcode, batches, createdBy } = req.body;
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-        // Validate product existence
-        const productExists = await Products.findById(productId);
-        if (!productExists) {
-            return errorResponse(res, 'Product not found.', 404);
+    try {
+        logger.info('🔄 Starting inventory creation or update...');
+        const {productId, companyId, vendorId, batches, createdBy} = req.body;
+
+        // ✅ 1. Validate Product Exists
+        const product = await Products.findById(productId).session(session);
+        if (!product) {
+            throw new Error('Product not found.');
         }
 
-        // Ensure batches is always an array
         const newBatches = Array.isArray(batches) ? batches : [batches];
-        let totalQuantity = newBatches.reduce((sum, batch) => sum + batch.quantity, 0);
-        let ledgerDescription = '';
-        let ledgerDebitAmount = newBatches.reduce((sum, batch) => {
+        const totalQuantity = newBatches.reduce((sum, batch) => sum + Number(batch.quantity || 0), 0);
+
+        const ledgerDebitAmount = newBatches.reduce((sum, batch) => {
             const qty = Number(batch.quantity || 0);
             const price = batch.purchasePrice != null
                 ? Number(batch.purchasePrice)
-                : Number(productExists.price.unitPurchasePrice || 0);
+                : Number(product.price.unitPurchasePrice || 0);
             return sum + (qty * price);
         }, 0);
 
         const debitCaption = 'Inventory';
         const creditCaption = 'Vendor Payable';
 
+        // ✅ 2. Check Existing Inventory
         let inventoryRecord;
-        const existingInventory = await Inventory.findOne({ productId, companyId, vendorId });
+        const existingInventory = await Inventory.findOne({productId, companyId, vendorId}).session(session);
 
         if (existingInventory) {
-            logger.info('Updating existing inventory...');
+            logger.info('📦 Existing inventory found. Updating...');
             existingInventory.batches.push(...newBatches);
             existingInventory.totalQuantity += totalQuantity;
-            inventoryRecord = await existingInventory.save();
-            ledgerDescription = `Updated inventory for Product: ${productId}`;
-            logger.info(`Inventory updated for Product: ${productId}`);
+            await existingInventory.save({session});
+
+            // 🔄 Re-fetch updated inventory to get barcodes correctly
+            inventoryRecord = await Inventory.findById(existingInventory._id).session(session);
         } else {
-            logger.info('Creating new inventory...');
-            inventoryRecord = await Inventory.create({
+            logger.info('🆕 No inventory found. Creating new...');
+            const [createdInventory] = await Inventory.create([{
                 productId,
                 companyId,
                 vendorId,
                 batches: newBatches,
                 totalQuantity,
-                createdBy,
-            });
-            ledgerDescription = `Added inventory for Product: ${productId}`;
-            logger.info(`Inventory added for Product: ${productId}`);
+                createdBy
+            }], {session});
+
+            inventoryRecord = await Inventory.findById(createdInventory._id).session(session);
         }
 
-        // 📌 Check for existing vendor account
+        // ✅ 3. Insert Serialized Units if Applicable
+        if (product.isSerialized) {
+            logger.info('🔎 Product is serialized. Handling serialized units...');
+
+            for (let i = 0; i < batches.length; i++) {
+                const incomingBatch = batches[i];
+                const savedBatch = inventoryRecord.batches[i];
+
+                const finalBarcode = savedBatch?.barcode;
+                if (!finalBarcode) {
+                    throw new Error(`Barcode missing for batch ${i + 1}`);
+                }
+
+                const items = incomingBatch.items || [];
+                if (items.length !== incomingBatch.quantity) {
+                    throw new Error(`Mismatch between quantity and unit items in batch ${i + 1}`);
+                }
+
+                const unitDocs = items.map((unit, idx) => {
+                    const hasAnyField = !!unit.serialNumber?.trim() || !!unit.modelNumber?.trim() || Number(unit.warrantyMonths || 0) > 0;
+                    if (!hasAnyField) {
+                        throw new Error(`Unit ${idx + 1} in batch ${i + 1} must have at least one field filled.`);
+                    }
+
+                    return {
+                        companyId,
+                        productId,
+                        inventoryId: inventoryRecord._id,
+                        batchBarcode: finalBarcode,
+                        sku: productExists.sku,
+                        serialNumber: unit.serialNumber?.trim(),
+                        modelNumber: unit.modelNumber?.trim(),
+                        warrantyMonths: unit.warrantyMonths,
+                        createdBy
+                    };
+                });
+
+                const serials = unitDocs.map(u => u.serialNumber).filter(Boolean);
+                if (new Set(serials).size !== serials.length) {
+                    throw new Error(`Duplicate serial numbers detected in batch ${i + 1}`);
+                }
+
+                await InventoryUnits.insertMany(unitDocs, {session});
+            }
+
+        }
+
+        // ✅ 4. Ensure Vendor Account Exists
         let accountId;
-        const existingAccount = await Account.findOne({ entityId: vendorId, companyId, isDeleted: false });
+        const existingAccount = await Account.findOne({
+            entityId: vendorId,
+            companyId,
+            isDeleted: false
+        }).session(session);
+
         if (existingAccount) {
             accountId = existingAccount._id;
         } else {
-            const account = new Account({
+            const newAccount = await Account.create([{
                 entityId: vendorId,
                 entityType: 'Vendor',
                 status: 'Active',
                 companyId,
                 createdBy
-            });
+            }], {session});
 
-            await account.save();
-            accountId = account._id;
-            logger.info(`Account created for Vendor ${vendorId}`);
-
+            accountId = newAccount[0]._id;
         }
 
-        // 💰 Create ledger entry
+        // ✅ 5. Ledger Entry (if any amount involved)
         if (ledgerDebitAmount > 0) {
             await createDoubleLedgerEntry({
                 companyId,
                 transactionId: new mongoose.Types.ObjectId().toString(),
                 transactionType: 'Purchase',
                 referenceType: 'Inventory',
-                description: ledgerDescription,
+                description: `Added or updated inventory for product: ${productId}`,
                 debitAccount: debitCaption,
                 debitAmount: ledgerDebitAmount,
                 creditAccount: creditCaption,
                 creditAmount: ledgerDebitAmount,
                 linkedEntityId: vendorId,
-                accountId, // ✅ Include accountId
+                accountId,
                 createdBy
             });
-            logger.info('Ledger entry created for inventory addition.');
         } else {
-            logger.error(`Skipped Ledger Entry: Invalid ledgerDebitAmount: ${ledgerDebitAmount}`);
+            logger.warn('⚠️ No ledger entry created because debit amount is zero.');
         }
 
-        return successResponse(res, inventoryRecord, existingInventory ? 'Inventory updated successfully' : 'Inventory created successfully');
+        await session.commitTransaction();
+        session.endSession();
+
+        logger.info('✅ Inventory operation completed successfully.');
+        return successResponse(res, inventoryRecord, existingInventory ? 'Inventory updated successfully.' : 'Inventory created successfully.');
     } catch (error) {
-        logger.error('Error creating or updating inventory:', error);
+        await session.abortTransaction();
+        session.endSession();
+
+        logger.error('❌ Error creating/updating inventory:', error);
         return errorResponse(res, error.message);
     }
 };
 
-
 export const printBarCodes = async (req, res) => {
     try {
         logger.info('Printing barcodes...');
-        const { quantity, sellingPrice, mgf_dt, expiry_dt, barcode, productName } = req.body;
+        const {quantity, sellingPrice, mgf_dt, expiry_dt, barcode, productName} = req.body;
         const barcodePath = `${process.env.UPLOAD_PATH}/${productName.replace(/\s+/g, '_')}.pdf`;
 
         console.log('req.body:', req.body);
@@ -123,7 +182,7 @@ export const printBarCodes = async (req, res) => {
             productName,
             barcode,
             sellingPrice,
-            barcodes: Array.from({ length: 1 }, () => ({
+            barcodes: Array.from({length: 1}, () => ({
                 mgf_dt: formattedMgfDate,
                 expiry_dt: formattedExpiryDate
             }))
@@ -133,7 +192,7 @@ export const printBarCodes = async (req, res) => {
 
         // ✅ Generate the PDF
         const pdfPath = await generatePDF('barcodes', barcodeData, barcodePath);
-        return successResponse(res, { pdfPath }, 'Barcode PDF generated successfully');
+        return successResponse(res, {pdfPath}, 'Barcode PDF generated successfully');
 
     } catch (error) {
         logger.error('Error Barcode PDF generation:', error);
@@ -153,22 +212,54 @@ export const getAllInventory = async (req, res) => {
         const filter = {companyId, isDeleted: false};
 
         const inventoryItems = await Inventory.find(filter)
-            .populate('productId vendorId')
+            .populate('productId')
+            .populate('vendorId')
+            .sort({createdAt: -1})
             .skip((page - 1) * limit)
-            .limit(Number(limit));
+            .limit(Number(limit))
+            .lean(); // ✅ lean()
 
         const totalRecords = await Inventory.countDocuments(filter);
+
+        const inventoryIds = inventoryItems.map(item => item._id);
+        const inventoryUnits = await InventoryUnits.find({
+            inventoryId: {$in: inventoryIds}
+        }).lean();
+
+        const unitsMap = inventoryUnits.reduce((acc, unit) => {
+            const invId = unit.inventoryId.toString();
+            if (!acc[invId]) acc[invId] = [];
+            acc[invId].push(unit);
+            return acc;
+        }, {});
+
+        // 🔥 Final clean construction
+        const inventoryWithUnits = inventoryItems.map(item => {
+            const newItem = {
+                ...item,
+                product: item.productId,  // ✅ populated full product
+                vendor: item.vendorId,    // ✅ populated full vendor
+                productId: item.productId?._id || item.productId, // ✅ ID only
+                vendorId: item.vendorId?._id || item.vendorId,    // ✅ ID only
+                units: unitsMap[item._id.toString()] || []        // ✅ attached units
+            };
+
+            return newItem;
+        });
+
         return successResponse(res, {
-            inventoryItems,
+            inventoryItems: inventoryWithUnits,
             totalRecords,
             currentPage: Number(page),
             totalPages: Math.ceil(totalRecords / limit)
         }, 'Inventory fetched successfully');
+
     } catch (error) {
         logger.error('Error fetching inventory:', error);
         return errorResponse(res, error.message);
     }
 };
+
 
 /**
  * @desc Get a single inventory item by ID
@@ -192,72 +283,99 @@ export const getInventoryById = async (req, res) => {
  * @route PUT /api/v1/inventory/:id
  */
 export const updateInventory = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
         const { batches, createdBy, productId, vendorId } = req.body;
 
-        // Fetch existing inventory record
-        const inventory = await Inventory.findById(req.params.id).lean(); // Fetch without hydration for better performance
-
+        // ✅ Fetch existing inventory
+        const inventory = await Inventory.findById(req.params.id).session(session);
         if (!inventory) {
-            return errorResponse(res, 'Inventory not found.', 404);
+            throw new Error('Inventory not found.');
         }
 
-        let updateFields = { updatedBy:createdBy };
+        // ✅ Fetch related product
+        const product = await Products.findById(productId).lean();
+        if (!product) {
+            throw new Error('Product not found.');
+        }
 
-        // 🔥 **Batch Change Detection**
+        // ✅ Step 1: Prepare fields to update
+        let updateFields = { updatedBy: createdBy };
+
         if (Array.isArray(batches) && batches.length > 0) {
-            const prevBatchesMap = new Map(inventory.batches.map(batch => [batch.barcode, batch]));
-
-            let modifiedBatches = [];
-            let newBatches = [];
-
-            batches.forEach(batch => {
-                const prevBatch = prevBatchesMap.get(batch.barcode);
-
-                if (prevBatch) {
-                    // **Check if batch fields changed**
-                    let isModified = (
-                        prevBatch.purchasePrice !== batch.purchasePrice ||
-                        prevBatch.expiry_dt?.toISOString() !== new Date(batch.expiry_dt)?.toISOString() ||
-                        prevBatch.mgf_dt?.toISOString() !== new Date(batch.mgf_dt)?.toISOString()
-                    );
-
-                    if (isModified) {
-                        modifiedBatches.push(batch);
-                    }
-                } else {
-                    // **New batch detected**
-                    newBatches.push(batch);
-                }
-            });
-
-            // **If new batches exist, add them**
-            if (newBatches.length > 0) {
-                updateFields.batches = [...inventory.batches, ...newBatches]; // Append new batches
-            }
-
-            if (modifiedBatches.length > 0) {
-                updateFields.batches = updateFields.batches || batches; // Ensure modified batches are included
-            }
+            updateFields.batches = batches;
+            updateFields.totalQuantity = batches.reduce((sum, batch) => sum + (batch.quantity || 0), 0);
         }
 
-        // ✅ **Update Product & Vendor If Provided**
         if (productId) updateFields.productId = productId;
         if (vendorId) updateFields.vendorId = vendorId;
-        // ✅ **Update totalQuantity based on batch changes**
-        updateFields.totalQuantity = updateFields.batches?.reduce((sum, batch) => sum + batch.quantity, 0) || inventory.totalQuantity;
 
-        // ✅ **Perform Update Using `findOneAndUpdate` to Trigger Hooks**
-        const updatedInventory = await Inventory.findOneAndUpdate(
+        // ✅ Step 2: Update inventory
+        await Inventory.findOneAndUpdate(
             { _id: req.params.id },
             { $set: updateFields },
-            { new: true, runValidators: true }
+            { new: true, runValidators: true, session }
         );
 
-        logger.info(`Inventory updated for Product ID: ${updatedInventory.productId}`);
-        return successResponse(res, updatedInventory, 'Inventory updated successfully');
+        // ✅ Step 3: RE-FETCH updated inventory
+        const updatedInventory = await Inventory.findById(req.params.id).lean().session(session);
+
+        // ✅ Step 4: Handle Serialized Units
+        if (product.isSerialized) {
+            logger.info('🔄 Handling serialized units...');
+
+            // 4a: Delete old units
+            await InventoryUnits.deleteMany({ inventoryId: req.params.id }).session(session);
+
+            // 4b: Prepare new units
+            const unitDocs = [];
+            for (let i = 0; i < updatedInventory.batches.length; i++) {
+                const batch = updatedInventory.batches[i]; // Now fully updated from Mongo
+                const { barcode = '' } = batch;
+                const incomingBatch = batches[i];
+                const items = incomingBatch.items || [];
+
+                if (!barcode) {
+                    throw new Error(`Batch ${i + 1} is missing barcode after update.`);
+                }
+
+                items.forEach((item, idx) => {
+                    const hasAnyField = item.serialNumber || item.modelNumber || item.warrantyMonths;
+                    if (hasAnyField) {
+                        unitDocs.push({
+                            companyId: updatedInventory.companyId,
+                            productId,
+                            inventoryId: updatedInventory._id,
+                            batchBarcode: barcode,
+                            sku: product.sku,
+                            serialNumber: item.serialNumber || '',
+                            modelNumber: item.modelNumber || '',
+                            warrantyMonths: item.warrantyMonths || 0,
+                            createdBy,
+                            status: 'In Stock'
+                        });
+                    }
+                });
+            }
+
+            if (unitDocs.length > 0) {
+                await InventoryUnits.insertMany(unitDocs, { session });
+            }
+        }
+
+        // ✅ Commit transaction
+        await session.commitTransaction();
+        session.endSession();
+
+        logger.info(`✅ Inventory updated for Product ID: ${productId}`);
+        return successResponse(res, {}, 'Inventory updated successfully');
     } catch (error) {
-        logger.error('Error updating inventory:', error);
+        await session.abortTransaction();
+        session.endSession();
+
+        logger.error('❌ Error updating inventory:', error);
         return errorResponse(res, error.message);
     }
 };
@@ -301,7 +419,7 @@ export const getAvailableInventory = async (req, res) => {
         }
 
         // Extract query parameters
-        const { companyId, includeBatches } = req.query;
+        const {companyId, includeBatches} = req.query;
 
         if (!companyId) {
             logger.error('Missing required query parameters: companyId.');
@@ -320,7 +438,7 @@ export const getAvailableInventory = async (req, res) => {
             productId: 1,
             companyId: 1,
             barcode: 1,
-            ...(includeBatches === 'true' && { batches: 1 }),
+            ...(includeBatches === 'true' && {batches: 1}),
         }).lean();
 
         if (!inventories || inventories.length === 0) {
@@ -330,7 +448,7 @@ export const getAvailableInventory = async (req, res) => {
 
         // Fetch product titles
         const productIds = inventories.map(inv => inv.productId);
-        const products = await Products.find({ _id: { $in: productIds } }, { _id: 1, productName: 1 }).lean();
+        const products = await Products.find({_id: {$in: productIds}}, {_id: 1, productName: 1}).lean();
         const productMap = products.reduce((map, product) => {
             map[product._id] = product.productName;
             return map;
@@ -341,8 +459,7 @@ export const getAvailableInventory = async (req, res) => {
             let sortedBatches = inventory.batches?.filter(batch => batch.quantity > 0) || [];
 
             // Sort batches alphabetically by batchId
-            sortedBatches.sort((a, b) => (productMap[inventory.productId] || 'Unknown Product').
-            localeCompare(productMap[inventory.productId] || 'Unknown Product'));
+            sortedBatches.sort((a, b) => (productMap[inventory.productId] || 'Unknown Product').localeCompare(productMap[inventory.productId] || 'Unknown Product'));
 
 
             return {

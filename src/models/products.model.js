@@ -17,6 +17,7 @@ const productSchema = new mongoose.Schema({
     },
     soldPrice: { type: Number, default: null },
     soldDate: { type: Date, default: null },
+    isSerialized: { type: Boolean, default: false },
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Companies" },
     batches: [
         {
