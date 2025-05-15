@@ -2,6 +2,7 @@ import {Companies, Inventory, Invoices, Payments, POSTransaction} from '../model
 import {errorResponse, generatePDF, logger, successResponse} from '../utils/index.js';
 import mongoose from "mongoose";
 import {createDoubleLedgerEntry} from "../utils/ledgerService.js";
+import InventoryUnits from "../models/inventoryUnits.model.js";
 
 export const createPOSTransaction = async (req, res) => {
     const session = await mongoose.startSession();
@@ -63,10 +64,13 @@ export const createPOSTransaction = async (req, res) => {
             }], {session});
         // Updating inventory
         for (const product of products) {
-            const {productId, quantity, batchId} = product;
+            const { productId, quantity, batchId, serialDetails = [] } = product;
 
-            // Step 1: Fetch the batch to validate stock availability
-            const inventory = await Inventory.findOne({companyId, productId, "batches._id": batchId}, {
+            const inventory = await Inventory.findOne({
+                companyId,
+                productId,
+                "batches._id": batchId
+            }, {
                 "batches.$": 1,
                 totalQuantity: 1
             }).session(session);
@@ -75,29 +79,66 @@ export const createPOSTransaction = async (req, res) => {
                 throw new Error(`Inventory not found for productId: ${productId}`);
             }
 
-            const batchToUpdate = inventory.batches[0]; // Since we used `$`, we get only the matched batch
-
+            const batchToUpdate = inventory.batches[0];
             if (!batchToUpdate) {
-                throw new Error(`Batch not found for batchId: ${batchId} in productId: ${productId}`);
+                throw new Error(`Batch not found for batchId: ${batchId}`);
             }
 
-            // Step 2: Validate available stock
             if (batchToUpdate.quantity < quantity) {
                 throw new Error(`Insufficient stock in batchId: ${batchId} for productId: ${productId}`);
             }
 
-            // Step 3: Deduct stock from batch
-            await Inventory.updateOne({
-                    companyId,
-                    productId,
-                    "batches._id": batchId
-                }, {$inc: {"batches.$.quantity": -quantity}}, // Decrement batch quantity
-                {session});
+            // 🧠 Handle Serialized Units
+            if (serialDetails.length > 0) {
+                // Step 1: Validate number of serials match quantity
+                if (serialDetails.length !== quantity) {
+                    throw new Error(`Serial numbers count mismatch for productId: ${productId}`);
+                }
 
-            // Step 4: Update totalQuantity separately
-            await Inventory.updateOne({companyId, productId}, {$inc: {totalQuantity: -quantity}}, // Decrement total quantity
-                {session});
+                // Step 2: Update InventoryUnits
+                for (const serial of serialDetails) {
+                    const updated = await InventoryUnits.findOneAndUpdate(
+                        {
+                            companyId,
+                            productId,
+                            batchBarcode: batchToUpdate.barcode,
+                            serialNumber: serial.trim(),
+                            status: 'In Stock'
+                        },
+                        {
+                            $set: {
+                                status: 'Sold',
+                                soldOn: new Date(),
+                                updatedBy: createdBy
+                            }
+                        },
+                        { session }
+                    );
+
+                    if (!updated) {
+                        throw new Error(`Serial number ${serial} not found or already sold for productId: ${productId}`);
+                    }
+                }
+            }
+
+            // 🔥 Finally: Deduct batch quantity
+            await Inventory.updateOne({
+                companyId,
+                productId,
+                "batches._id": batchId
+            }, {
+                $inc: { "batches.$.quantity": -quantity }
+            }, { session });
+
+            // 🔥 And Deduct total quantity
+            await Inventory.updateOne({
+                companyId,
+                productId
+            }, {
+                $inc: { totalQuantity: -quantity }
+            }, { session });
         }
+
 
 
         logger.info(`Inventory updated for transaction ${newTransaction.transactionNumber}`);

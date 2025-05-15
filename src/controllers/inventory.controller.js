@@ -91,7 +91,7 @@ export const createInventory = async (req, res) => {
                         productId,
                         inventoryId: inventoryRecord._id,
                         batchBarcode: finalBarcode,
-                        sku: productExists.sku,
+                        sku: product.sku,
                         serialNumber: unit.serialNumber?.trim(),
                         modelNumber: unit.modelNumber?.trim(),
                         warrantyMonths: unit.warrantyMonths,
@@ -407,38 +407,35 @@ export const softDeleteInventory = async (req, res) => {
  * @param {Object} req - Express request object.
  * @param {Object} res - Express response object.
  */
+
 export const getAvailableInventory = async (req, res) => {
     try {
         logger.info('Fetching available inventory...');
 
-        // Validate request parameters
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             logger.error('Validation failed for getAvailableInventory:', errors.array());
             return errorResponse(res, errors.array());
         }
 
-        // Extract query parameters
-        const {companyId, includeBatches} = req.query;
+        const { companyId, includeBatches } = req.query;
 
         if (!companyId) {
             logger.error('Missing required query parameters: companyId.');
             return errorResponse(res, 'companyId is a required query parameter.');
         }
 
-        // Build the query object
         const query = {
             companyId,
             isDeleted: false,
         };
 
-        // Fetch inventory from the database
         const inventories = await Inventory.find(query, {
             totalQuantity: 1,
             productId: 1,
             companyId: 1,
             barcode: 1,
-            ...(includeBatches === 'true' && {batches: 1}),
+            ...(includeBatches === 'true' && { batches: 1 }),
         }).lean();
 
         if (!inventories || inventories.length === 0) {
@@ -446,27 +443,30 @@ export const getAvailableInventory = async (req, res) => {
             return softErrorResponse(res, [], 'No inventory found');
         }
 
-        // Fetch product titles
+        // ✅ Fetch product names + isSerialized
         const productIds = inventories.map(inv => inv.productId);
-        const products = await Products.find({_id: {$in: productIds}}, {_id: 1, productName: 1}).lean();
+        const products = await Products.find(
+            { _id: { $in: productIds } },
+            { _id: 1, productName: 1, isSerialized: 1 }
+        ).lean();
+
         const productMap = products.reduce((map, product) => {
-            map[product._id] = product.productName;
+            map[product._id] = {
+                name: product.productName,
+                isSerialized: product.isSerialized || false
+            };
             return map;
         }, {});
 
-        // Process inventories with alphabetically sorted batches
         const processedInventories = inventories.map(inventory => {
             let sortedBatches = inventory.batches?.filter(batch => batch.quantity > 0) || [];
 
-            // Sort batches alphabetically by batchId
-            sortedBatches.sort((a, b) => (productMap[inventory.productId] || 'Unknown Product').localeCompare(productMap[inventory.productId] || 'Unknown Product'));
-
-
             return {
                 productId: inventory.productId,
-                name: productMap[inventory.productId] || 'Unknown Product',
+                name: productMap[inventory.productId]?.name || 'Unknown Product',
                 companyId: inventory.companyId,
                 totalQuantity: inventory.totalQuantity,
+                isSerialized: productMap[inventory.productId]?.isSerialized || false, // ✅ OUTSIDE
                 batches: sortedBatches.map(batch => ({
                     batchId: batch._id,
                     quantity: batch.quantity,
@@ -478,7 +478,6 @@ export const getAvailableInventory = async (req, res) => {
             };
         });
 
-        // Respond with inventory data
         logger.info(`Inventory fetched successfully for Company: ${companyId}`);
         return successResponse(res, processedInventories, 'Available inventory retrieved successfully');
     } catch (error) {
@@ -486,4 +485,3 @@ export const getAvailableInventory = async (req, res) => {
         return errorResponse(res, error.message);
     }
 };
-
