@@ -24,7 +24,9 @@ const getDateRangeFromFilter = (filter, customStartDate, customEndDate) => {
         default:
             return {startDate: moment('2000-01-01'), endDate: now.clone().endOf('day')};
     }
-};const getLedgerKPIs = async (companyId, startDate, endDate) => {
+};
+
+const getLedgerKPIs = async (companyId, startDate, endDate) => {
     const matchBase = {
         companyId: new mongoose.Types.ObjectId(companyId),
         isDeleted: false,
@@ -218,51 +220,118 @@ const getDateRangeFromFilter = (filter, customStartDate, customEndDate) => {
     };
 };
 
-// 📈 Sales Chart
-const getSalesChart = async (companyId, startDate, endDate) => {
-    const salesData = await Ledger.aggregate([
-        {
-            $match: {
-                companyId: new mongoose.Types.ObjectId(companyId),
-                isDeleted: false,
-                transactionType: 'Sale',
-                entryType: 'credit',
-                date: {
-                    $gte: startDate.toDate(),
-                    $lte: endDate.toDate(),
-                },
-            },
-        },
-        {
-            $group: {
-                _id: {
-                    year: {$year: '$date'},
-                    month: {$month: '$date'},
-                },
-                totalSales: {$sum: '$amount'},
-            },
-        },
-        {$sort: {'_id.year': 1, '_id.month': 1}},
-    ]);
+// 📈 Dynamic Sales + Expense Chart with X-Axis granularity
+const getSalesChart = async (companyId, startDate, endDate, filter = 'month') => {
+    const matchBase = {
+        companyId: new mongoose.Types.ObjectId(companyId),
+        isDeleted: false,
+        date: {
+            $gte: startDate.toDate(),
+            $lte: endDate.toDate(),
+        }
+    };
+    console.log('filter: ', filter)
+    // 👇 Determine group key and label formatter
+    let groupId, labelBuilder, loopIterator;
 
-    const labels = [];
-    const values = [];
-    const monthsDiff = endDate.diff(startDate, 'months') + 1;
+    switch (filter) {
+        case 'today': {
+            groupId = { hour: { $hour: '$date' } };
+            loopIterator = Array.from({ length: 24 }, (_, i) => i);
+            labelBuilder = (i) => moment().hour(i).format('h A');
+            break;
+        }
+        case 'week': {
+            groupId = { day: { $dayOfWeek: '$date' } };
+            loopIterator = [1, 2, 3, 4, 5, 6, 7]; // Sun to Sat
+            labelBuilder = (i) => moment().day(i).format('ddd');
+            break;
+        }
+        case 'month': {
+            const daysInMonth = endDate.date();
+            groupId = { day: { $dayOfMonth: '$date' } };
+            loopIterator = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+            labelBuilder = (i) => moment(startDate).date(i).format('D MMM');
+            break;
+        }
+        case 'year':
+        case 'all': {
+            groupId = { month: { $month: '$date' }, year: { $year: '$date' } };
+            const monthsDiff = endDate.diff(startDate, 'months') + 1;
+            loopIterator = Array.from({ length: monthsDiff }, (_, i) => moment(startDate).add(i, 'months'));
+            labelBuilder = (m) => m.format('MMM YYYY');
+            break;
+        }
+        case 'custom': {
+            const diffHours = endDate.diff(startDate, 'hours');
+            const diffDays = endDate.diff(startDate, 'days');
+            const diffMonths = endDate.diff(startDate, 'months');
 
-    for (let i = 0; i < monthsDiff; i++) {
-        const current = moment(startDate).add(i, 'months');
-        const label = current.format('MMM');
-
-        const total = salesData.find(
-            (s) => s._id.month === current.month() + 1 && s._id.year === current.year()
-        )?.totalSales || 0;
-
-        labels.push(label);
-        values.push(total);
+            if (diffHours <= 24) {
+                groupId = { hour: { $hour: '$date' } };
+                loopIterator = Array.from({ length: 24 }, (_, i) => i);
+                labelBuilder = (i) => moment().hour(i).format('h A');
+            } else if (diffDays <= 7) {
+                groupId = { day: { $dayOfMonth: '$date' } };
+                loopIterator = Array.from({ length: diffDays + 1 }, (_, i) => i);
+                labelBuilder = (i) => moment(startDate).add(i, 'days').format('ddd D MMM');
+            } else if (diffDays <= 60) {
+                groupId = { day: { $dayOfMonth: '$date' }, month: { $month: '$date' } };
+                loopIterator = Array.from({ length: diffDays + 1 }, (_, i) => i);
+                labelBuilder = (i) => moment(startDate).add(i, 'days').format('D MMM');
+            } else {
+                groupId = { month: { $month: '$date' }, year: { $year: '$date' } };
+                loopIterator = Array.from({ length: diffMonths + 1 }, (_, i) => moment(startDate).add(i, 'months'));
+                labelBuilder = (m) => m.format('MMM YYYY');
+            }
+            break;
+        }
+        default:
+            throw new Error('Invalid filter');
     }
 
-    return {labels, data: values};
+    const salesAgg = await Ledger.aggregate([
+        { $match: { ...matchBase, transactionType: 'Sale', entryType: 'credit' } },
+        { $group: { _id: groupId, total: { $sum: '$amount' } } }
+    ]);
+
+    const expenseAgg = await Ledger.aggregate([
+        { $match: { ...matchBase, transactionType: 'Expense', entryType: 'debit' } },
+        { $group: { _id: groupId, total: { $sum: '$amount' } } }
+    ]);
+
+    // 🧠 Helper to match value from aggregation
+    const getTotal = (aggArr, matchKey) => {
+        return aggArr.find(item => {
+            if (filter === 'today') return item._id.hour === matchKey;
+            if (filter === 'week') return item._id.day === matchKey;
+            if (filter === 'month') return item._id.day === matchKey;
+            if (filter === 'year' || filter === 'all') {
+                return item._id.month === matchKey.month() + 1 && item._id.year === matchKey.year();
+            }
+            return false;
+        })?.total || 0;
+    };
+
+    const labels = [];
+    const sales = [];
+    const expenses = [];
+
+    for (const point of loopIterator) {
+        labels.push(labelBuilder(point));
+        sales.push(getTotal(salesAgg, point));
+        expenses.push(getTotal(expenseAgg, point));
+    }
+    console.log('labels: ', labels)
+    return {
+        labels,
+        data: {
+            sales,
+            expenses
+        }
+    };
 };
+
 
 // 📦 Inventory Value
 const getInventoryValue = async (companyId) => {
@@ -364,7 +433,7 @@ export const getDashboard = async (req, res) => {
                 getLedgerKPIs(companyId, startDate, endDate),
                 getInventoryValue(companyId),
                 getEntityCounts(companyId),
-                getSalesChart(companyId, startDate, endDate),
+                getSalesChart(companyId, startDate, endDate, filter),
                 getInventoryTable(companyId),
                 getTopProducts(companyId),
             ]);
