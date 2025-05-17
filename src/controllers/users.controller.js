@@ -47,8 +47,10 @@ export const createUser = async (req, res) => {
 export const loginUser = async (req, res) => {
     try {
         const { username, password } = req.body;
+        console.log('username: ', username);
+        console.log('pass: ', password);
         const user = await Users.findOne({ username }).lean();
-
+        console.log('user: ', user);
         if (!user) {
             return errorResponse(res, 'Invalid credentials.', 200);
         }
@@ -56,7 +58,7 @@ export const loginUser = async (req, res) => {
         // Compare the password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return errorResponse(res, 'Invalid credentials.', 200);
+            return errorResponse(res, 'Invalid password', 200);
         }
 
         console.log('user', user);
