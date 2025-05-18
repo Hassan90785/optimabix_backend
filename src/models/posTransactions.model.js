@@ -143,7 +143,7 @@ posTransactionSchema.pre('save', async function(next) {
             .sort({ transactionNumber: -1 })
             .exec();
 
-        let counter = 1;
+        let     counter = 1;
         if (lastTransaction) {
             const lastCounter = parseInt(lastTransaction.transactionNumber.split('-').pop());
             counter = lastCounter + 1;

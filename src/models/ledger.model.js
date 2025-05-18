@@ -52,7 +52,7 @@ const ledgerSchema = new mongoose.Schema({
     },
     referenceType: {
         type: String,
-        enum: ['POS Transactions', 'Payments', 'Inventory'],
+        enum: ['POS Transactions', 'Payments', 'Inventory', 'Returns'],
         required: true
     },
     invoiceId: {

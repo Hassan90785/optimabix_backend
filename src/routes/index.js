@@ -21,6 +21,7 @@ import adminRoutes from "./admin.routes.js";
 import accountRoutes from "./account.routes.js";
 import dashboardRoutes from "./dashboard.routes.js";
 import expenseRoutes from "./expense.routes.js";
+import returnsRoutes from "./returns.routes.js";
 
 const router = express.Router();
 
@@ -45,5 +46,6 @@ router.use('/auditLogs', auditLogsRoutes);
 router.use('/accounts', accountRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/expense', expenseRoutes);
+router.use('/returns', returnsRoutes);
 
 export default router;
