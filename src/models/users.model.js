@@ -36,8 +36,14 @@ const userSchema = new mongoose.Schema({
     companyId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Companies',
-        default: null
+        required: true
     },
+    branches: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Branch'
+        }
+    ],
     accessStatus: {
         type: String,
         enum: ['Active', 'Suspended', 'Revoked', 'Trial', 'Expired'],
@@ -57,14 +63,6 @@ const userSchema = new mongoose.Schema({
     isDeleted: {
         type: Boolean,
         default: false
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now
-    },
-    updatedAt: {
-        type: Date,
-        default: Date.now
     }
 }, { timestamps: true });
 

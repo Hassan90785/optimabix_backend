@@ -19,6 +19,7 @@ export { default as StockAdjustment } from './stockAdjustments.model.js';
 export { default as SubscriptionPlan } from './subscriptionPlans.model.js';
 export { default as AuditLog } from './auditLogs.model.js';
 export { default as Returns } from './returns.model.js';
+export { default as Branches } from './branches.model.js';
 
 // Exporting mongoose instance if needed for central management
 export default mongoose;

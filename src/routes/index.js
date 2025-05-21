@@ -22,6 +22,7 @@ import accountRoutes from "./account.routes.js";
 import dashboardRoutes from "./dashboard.routes.js";
 import expenseRoutes from "./expense.routes.js";
 import returnsRoutes from "./returns.routes.js";
+import branchRoutes from "./branch.routes.js";
 
 const router = express.Router();
 
@@ -47,5 +48,5 @@ router.use('/accounts', accountRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/expense', expenseRoutes);
 router.use('/returns', returnsRoutes);
-
+router.use('/branches', branchRoutes);
 export default router;
