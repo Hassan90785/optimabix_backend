@@ -1,4 +1,4 @@
-import {Inventory, Products} from '../models/index.js';
+import {Inventory, Ledger, POSTransaction, Products} from '../models/index.js';
 import {errorResponse, generatePDF, logger, successResponse} from '../utils/index.js';
 import {validationResult} from "express-validator";
 import moment from 'moment';
@@ -385,22 +385,57 @@ export const updateInventory = async (req, res) => {
  * @desc Soft delete an inventory record
  * @route DELETE /api/v1/inventory/:id
  */
+
 export const softDeleteInventory = async (req, res) => {
     try {
-        const inventory = await Inventory.findById(req.params.id);
+        const { id } = req.params;
+        const { createdBy } = req.query; // change here
+        const inventory = await Inventory.findById(id);
         if (!inventory) {
             return errorResponse(res, 'Inventory not found.', 404);
         }
 
-        await inventory.softDelete(req.user._id);
+        // 🚫 Prevent deletion if inventory has units
+        const linkedUnits = await InventoryUnits.exists({ inventoryId: inventory._id });
+        if (linkedUnits) {
+            return errorResponse(res, 'Inventory has associated units and cannot be deleted.', 400);
+        }
+
+        // 🚫 Prevent deletion if stock exists
+        if (inventory.totalQuantity > 0) {
+            return errorResponse(res, 'Inventory still holds stock. Cannot delete.', 400);
+        }
+
+        // 🚫 Prevent deletion if linked in Ledger
+        const linkedInLedger = await Ledger.exists({
+            referenceType: 'Inventory',
+            isDeleted: false,
+            transactionId: inventory._id.toString()
+        });
+        if (linkedInLedger) {
+            return errorResponse(res, 'Inventory is used in Ledger. Cannot delete.', 400);
+        }
+
+        // 🚫 Prevent deletion if linked in POS Transactions
+        const barcodes = inventory.batches.map(b => b.barcode);
+        const linkedInPOS = await POSTransaction.exists({
+            'products.batchId': { $in: barcodes },
+            isDeleted: false
+        });
+        if (linkedInPOS) {
+            return errorResponse(res, 'Inventory is used in POS Transactions. Cannot delete.', 400);
+        }
+
+        // ✅ Soft-delete inventory
+        await inventory.softDelete(createdBy);
         logger.info(`Inventory soft-deleted for Product ID: ${inventory.productId}`);
         return successResponse(res, {}, 'Inventory soft-deleted successfully');
+
     } catch (error) {
         logger.error('Error soft-deleting inventory:', error);
         return errorResponse(res, error.message);
     }
 };
-
 
 /**
  * Controller to get available inventory.
