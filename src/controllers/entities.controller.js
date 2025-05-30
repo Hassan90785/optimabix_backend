@@ -1,4 +1,4 @@
-import {AuditLog, Entities} from '../models/index.js';
+import {AuditLog, Entities, Inventory, Ledger} from '../models/index.js';
 import {errorResponse, logger, successResponse} from '../utils/index.js';
 import Account from "../models/account.model.js";
 
@@ -12,6 +12,8 @@ export const createEntity = async (req, res) => {
             entityType,
             entityName,
             contactPerson,
+            email,
+            phone,
             billingAddress,
             shippingAddress,
             createdBy,
@@ -31,6 +33,8 @@ export const createEntity = async (req, res) => {
             contactPerson,
             billingAddress,
             shippingAddress,
+            email,
+            phone,
             taxInformation,
             companyId,
             createdBy
@@ -147,7 +151,8 @@ export const updateEntity = async (req, res) => {
             billingAddress,
             shippingAddress,
             taxInformation,
-            companyId,
+            email,
+            phone,
             createdBy
         } = req.body;
 
@@ -157,7 +162,8 @@ export const updateEntity = async (req, res) => {
                 entityType,
                 entityName,
                 contactPerson,
-                billingAddress,
+                billingAddress,   email,
+                phone,
                 shippingAddress,
                 taxInformation,
                 updatedBy: createdBy
@@ -180,19 +186,51 @@ export const updateEntity = async (req, res) => {
  * @desc Soft delete an entity
  * @route DELETE /api/v1/entities/:id
  */
+
 export const softDeleteEntity = async (req, res) => {
     try {
-        const entity = await Entities.findById(req.params.id);
+        const { id } = req.params;
+        const { createdBy } = req.query; // change here
+
+        const entity = await Entities.findById(id);
         if (!entity) {
             return errorResponse(res, 'Entity not found.', 404);
         }
 
-        await entity.softDelete(req.user._id);
+        // Check active link in Account
+        const accountLinked = await Account.exists({ entityId: id, isDeleted: false });
+        if (accountLinked) {
+            return errorResponse(res, 'Entity is linked to active Account(s). Cannot delete.', 400);
+        }
+
+        // Check active link in Inventory (Vendor)
+        const inventoryLinked = await Inventory.exists({ vendorId: id, isDeleted: false });
+        if (inventoryLinked) {
+            return errorResponse(res, 'Entity is linked to Inventory records. Cannot delete.', 400);
+        }
+
+        // Check active link in Ledger
+        const ledgerLinked = await Ledger.exists({ linkedEntityId: id, isDeleted: false });
+        if (ledgerLinked) {
+            return errorResponse(res, 'Entity is linked in Ledger. Cannot delete.', 400);
+        }
+
+    /*    // Check active link in POS Transactions
+        const posLinked = await POSTransaction.exists({ linkedEntityId: id, isDeleted: false });
+        if (posLinked) {
+            return errorResponse(res, 'Entity is used in POS Transactions. Cannot delete.', 400);
+        }*/
+
+        // Soft-delete entity
+        entity.isDeleted = true;
+        entity.deletedBy = createdBy;
+        await entity.save();
+
         logger.info(`Entity soft-deleted: ${entity.entityName}`);
         return successResponse(res, {}, 'Entity soft-deleted successfully');
     } catch (error) {
         logger.error('Error soft-deleting entity:', error);
-        return errorResponse(res, error.message);
+        return errorResponse(res, error.message || 'Internal server error');
     }
 };
 
