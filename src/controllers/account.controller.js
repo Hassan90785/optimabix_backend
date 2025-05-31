@@ -77,7 +77,7 @@ export const updateAccount = async (req, res) => {
 export const deleteAccount = async (req, res) => {
     try {
         const { id } = req.params;
-        const deletedBy = req.user._id;
+        const { createdBy } = req.query; // change here
 
         const account = await Account.findOne({ _id: id, isDeleted: false });
         if (!account) {
@@ -85,12 +85,12 @@ export const deleteAccount = async (req, res) => {
         }
 
         account.isDeleted = true;
-        account.deletedBy = deletedBy;
+        account.deletedBy = createdBy;
         await account.save();
 
         await AuditLog.logAuditEvent({
             companyId: account.companyId,
-            createdBy: deletedBy,
+            createdBy: createdBy,
             actionType: "Delete",
             entityType: "Account",
             entityId: account._id,
